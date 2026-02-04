@@ -107,7 +107,7 @@ function formatPacketLog(pfx: string, envelope: any) {
         recvInfo = `S: ${envelope.packet.rxSnr}, R: ${envelope.packet.rxRssi}`;
     }
 
-    return `[${pfx}] <${flags}> [${recvInfo}] [${senderString} -> ${destString}]`
+    return `[${pfx}] [#${envelope.channelId}] <${flags}> [${recvInfo}] [${senderString} -> ${destString}]`
 }
 
 function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
@@ -160,6 +160,39 @@ function createPositionResponse(channelId: string, destination: number, requestI
                     latitudeI: MSH_POS_LAT ? Math.floor(parseFloat(MSH_POS_LAT) / 1e-7) : undefined,
                     longitudeI: MSH_POS_LON ? Math.floor(parseFloat(MSH_POS_LON) / 1e-7) : undefined,
                     altitude: MSH_POS_ALT ? parseInt(MSH_POS_ALT) : undefined,
+                })),
+                requestId,
+            }),
+        })
+        .build();
+}
+
+async function createTelemetryEnvironmentMetricsResponse(channelId: string, destination: number, requestId: number = 0) {
+    const temperatureResult = await queryPrometheus(`avg_over_time(world_temperature{job="micrometeo", location="outside"}[1m])`);
+    const pressureResult = await queryPrometheus(`avg_over_time(world_atmospheric_pressure{job="micrometeo", location="home"}[1m])`);
+    
+    if (temperatureResult.resultType !== "vector" || pressureResult.resultType !== "vector") return;
+    if (temperatureResult.result.length === 0 || pressureResult.result.length === 0) return;
+
+    const temperature = parseFloat(temperatureResult.result[0].value[1]);
+    const barometricPressure = parseFloat(pressureResult.result[0].value[1]);
+
+    return new PacketBuilder()
+        .setChannelId(channelId)
+        .setDestination(destination)
+        .setPayload({
+            case: "decoded",
+            value: create(Protobuf.Mesh.DataSchema, {
+                portnum: Protobuf.Portnums.PortNum.TELEMETRY_APP,
+                payload: toBinary(Protobuf.Telemetry.TelemetrySchema, create(Protobuf.Telemetry.TelemetrySchema, {
+                    time: Math.floor(new Date().getTime() / 1000),
+                    variant: {
+                        case: "environmentMetrics",
+                        value: {
+                            temperature,
+                            barometricPressure,
+                        }
+                    }
                 })),
                 requestId,
             }),
@@ -288,8 +321,6 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
-    const senderString = toStringUserId(envelope.packet.from);
-
     let routeDiscovery = fromBinary(Protobuf.Mesh.RouteDiscoverySchema, envelope.packet.payloadVariant.value.payload);
 
     console.log(formatPacketLog("TracerouteApp", envelope), routeDiscovery);
@@ -313,6 +344,31 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
     }
 }
 
+async function handleTelemetryApp(envelope: any, receivedTopic: string) {
+    if (!envelope.packet.payloadVariant) return;
+    if (envelope.packet.payloadVariant.case !== "decoded") return;
+
+    let telemetry = fromBinary(Protobuf.Telemetry.TelemetrySchema, envelope.packet.payloadVariant.value.payload);
+
+    console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] at ${new Date(telemetry.time * 1000).toISOString()}`, telemetry.variant.value);
+    
+    if (envelope.packet.to === stringUidToNumber(MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
+        switch (telemetry.variant.case) {
+            case "environmentMetrics": {
+                await client.publishAsync(receivedTopic, Buffer.from(toBinary(
+                    Protobuf.Mqtt.ServiceEnvelopeSchema,
+                    await createTelemetryEnvironmentMetricsResponse(envelope.channelId, envelope.packet.from, envelope.packet.id),
+                )));
+                return;
+            }
+            default: {
+                console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] unsupported telemetry request`);
+                return;
+            }
+        }
+    }
+}
+
 client.on("message", async (topic, message) => {
     const envelope = fromBinary(Protobuf.Mqtt.ServiceEnvelopeSchema, message);
 
@@ -331,36 +387,50 @@ client.on("message", async (topic, message) => {
         case Protobuf.Portnums.PortNum.TRACEROUTE_APP: {
             return await handleTracerouteApp(envelope, topic);
         }
+        case Protobuf.Portnums.PortNum.TELEMETRY_APP: {
+            return await handleTelemetryApp(envelope, topic);
+        }
         default: {
             console.log(formatPacketLog(topic, envelope), envelope, envelope.packet.payloadVariant);
         }
     }
 });
 
+const DEFAULT_CHANNEL = "LongFast";
+
 async function sendNodeInfo() {
-    await client.publishAsync(TOPIC + "/2/e/" + "LongFast" + "/" + GATEWAY, Buffer.from(toBinary(
+    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
         Protobuf.Mqtt.ServiceEnvelopeSchema, 
-        createNodeInfoResponse("LongFast", 0xffffffff),
+        createNodeInfoResponse(DEFAULT_CHANNEL, 0xffffffff),
     )));
+    console.log("node info sent");
 }
 
 async function sendPosition() {
-    await client.publishAsync(TOPIC + "/2/e/" + "LongFast" + "/" + GATEWAY, Buffer.from(toBinary(
+    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
         Protobuf.Mqtt.ServiceEnvelopeSchema, 
-        createPositionResponse("LongFast", 0xffffffff),
+        createPositionResponse(DEFAULT_CHANNEL, 0xffffffff),
     )));
+    console.log("position sent");
+}
+
+async function sendTelemetry() {
+    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
+        Protobuf.Mqtt.ServiceEnvelopeSchema, 
+        await createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff),
+    )));
+    console.log("telemetry sent");
 }
 
 setInterval(async () => {
     await sendNodeInfo();
-    console.log("node info sent");
     await sendPosition();
-    console.log("position sent");
 }, 3600 * 1000);
+
+setInterval(async () => {
+    await sendTelemetry();
+}, 300 * 1000);
 
 await sendNodeInfo();
 await sendPosition();
-
-// console.log(fromBinary(Protobuf.Mqtt.ServiceEnvelopeSchema, await fs.readFile("./packet.msh")).packet.payloadVariant);
-
-// console.log(Protobuf.Mesh.HardwareModel)
+await sendTelemetry();
