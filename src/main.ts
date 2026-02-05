@@ -110,6 +110,13 @@ function formatPacketLog(pfx: string, envelope: any) {
     return `[${pfx}] [#${envelope.channelId}] <${flags}> [${recvInfo}] [${senderString} -> ${destString}]`
 }
 
+async function sendPacket(envelope: any) {
+    await client.publishAsync(TOPIC + "/2/e/" + envelope.channelId + "/" + envelope.gatewayId, Buffer.from(toBinary(
+        Protobuf.Mqtt.ServiceEnvelopeSchema, 
+        envelope,
+    )));
+}
+
 function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
     return new PacketBuilder()
         .setChannelId(channelId)
@@ -117,7 +124,7 @@ function createTextResponse(channelId: string, destination: number, text: string
         .setPayload({
             case: "decoded",
             value: create(Protobuf.Mesh.DataSchema, {
-                portnum: 1,
+                portnum: Protobuf.Portnums.PortNum.TEXT_MESSAGE_APP,
                 payload: Buffer.from(text),
                 replyId,
             }),
@@ -279,10 +286,7 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
         return;
     }
 
-    await client.publishAsync(receivedTopic, Buffer.from(toBinary(
-        Protobuf.Mqtt.ServiceEnvelopeSchema,
-        createTextResponse(envelope.channelId, 0xffffffff, response, envelope.packet.id),
-    )));
+    await sendPacket(createTextResponse(envelope.channelId, 0xffffffff, response, envelope.packet.id));
 }
 
 async function handleNodeInfoApp(envelope: any, receivedTopic: string) {
@@ -294,10 +298,7 @@ async function handleNodeInfoApp(envelope: any, receivedTopic: string) {
     console.log(formatPacketLog("NodeInfoApp", envelope), `${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel}`);
     
     if (envelope.packet.to === stringUidToNumber(MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
-        await client.publishAsync(receivedTopic, Buffer.from(toBinary(
-            Protobuf.Mqtt.ServiceEnvelopeSchema,
-            createNodeInfoResponse(envelope.channelId, envelope.packet.from, envelope.packet.id),
-        )));
+        await sendPacket(createNodeInfoResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
     }
 }
 
@@ -310,10 +311,7 @@ async function handlePositionApp(envelope: any, receivedTopic: string) {
     console.log(formatPacketLog("PositionApp", envelope), `LAT: ${position.latitudeI * 1e-7}, LON: ${position.latitudeI * 1e-7}, ALT: ${position.altitude}, SRC: ${position.locationSource}`);
     
     if (envelope.to === stringUidToNumber(MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
-        await client.publishAsync(receivedTopic, Buffer.from(toBinary(
-            Protobuf.Mqtt.ServiceEnvelopeSchema,
-            createPositionResponse(envelope.channelId, envelope.packet.from, envelope.packet.id),
-        )));
+        await sendPacket(createPositionResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
     }
 }
 
@@ -326,8 +324,7 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
     console.log(formatPacketLog("TracerouteApp", envelope), routeDiscovery);
     
     if (envelope.packet.to === stringUidToNumber(MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
-        await client.publishAsync(receivedTopic, Buffer.from(toBinary(
-            Protobuf.Mqtt.ServiceEnvelopeSchema,
+        await sendPacket(
             new PacketBuilder()
                 .setChannelId(envelope.channelId)
                 .setDestination(envelope.packet.from)
@@ -340,7 +337,7 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
                     }),
                 })
                 .build()
-        )));
+        );
     }
 }
 
@@ -355,10 +352,7 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     if (envelope.packet.to === stringUidToNumber(MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
         switch (telemetry.variant.case) {
             case "environmentMetrics": {
-                await client.publishAsync(receivedTopic, Buffer.from(toBinary(
-                    Protobuf.Mqtt.ServiceEnvelopeSchema,
-                    await createTelemetryEnvironmentMetricsResponse(envelope.channelId, envelope.packet.from, envelope.packet.id),
-                )));
+                await sendPacket(await createTelemetryEnvironmentMetricsResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
                 return;
             }
             default: {
@@ -369,8 +363,64 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     }
 }
 
+class ReceivedPacketInfo {
+    constructor(
+        public id: number, 
+        public from: number, 
+        public to: number, 
+        public portnum: number, 
+        public receivedAt: Date = new Date()) {}
+
+    static fromPacket(p: any) {
+        return new this(
+            p.id, 
+            p.from, 
+            p.to, 
+            p.payloadVariant?.value?.portnum ?? 0
+        );
+    }
+
+    public compare(i: this) {
+        return this.id === i.id &&
+            this.from === i.from &&
+            this.to === i.to &&
+            this.portnum === i.portnum &&
+            this.receivedAt.getDate() === i.receivedAt.getDate();
+    }
+}
+
+const receivedPackets: ReceivedPacketInfo[] = [];
+
+setInterval(() => {
+    if (receivedPackets.length === 0) return;
+    
+    // console.log("cleaning up received packets info cache...");
+    let counter = 0;
+    for (let i = 0; i < receivedPackets.length; i++) {
+        const p = receivedPackets[i];
+        if (!p) continue;
+        if (new Date().getTime() - p.receivedAt.getTime()  > 300 * 1000) {
+            receivedPackets.splice(i);
+            counter++;
+        }
+    }
+    if (counter !== 0) {
+        console.log(`removed ${counter} entries from packets info cache.`);
+    }
+}, 60 * 1000);
+
 client.on("message", async (topic, message) => {
     const envelope = fromBinary(Protobuf.Mqtt.ServiceEnvelopeSchema, message);
+
+    const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
+    if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {
+        console.log(formatPacketLog(topic, envelope), `duplicate packet with id=${packetInfo.id}, throwing away.`);
+        return;
+    } else {
+        receivedPackets.push(packetInfo);
+    }
+
+    // console.log(topic, envelope);
 
     if (envelope.gatewayId !== GATEWAY) return;
 
@@ -399,26 +449,17 @@ client.on("message", async (topic, message) => {
 const DEFAULT_CHANNEL = "LongFast";
 
 async function sendNodeInfo() {
-    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
-        Protobuf.Mqtt.ServiceEnvelopeSchema, 
-        createNodeInfoResponse(DEFAULT_CHANNEL, 0xffffffff),
-    )));
+    await sendPacket(createNodeInfoResponse(DEFAULT_CHANNEL, 0xffffffff));
     console.log("node info sent");
 }
 
 async function sendPosition() {
-    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
-        Protobuf.Mqtt.ServiceEnvelopeSchema, 
-        createPositionResponse(DEFAULT_CHANNEL, 0xffffffff),
-    )));
+    await sendPacket(createPositionResponse(DEFAULT_CHANNEL, 0xffffffff));
     console.log("position sent");
 }
 
 async function sendTelemetry() {
-    await client.publishAsync(TOPIC + "/2/e/" + DEFAULT_CHANNEL + "/" + GATEWAY, Buffer.from(toBinary(
-        Protobuf.Mqtt.ServiceEnvelopeSchema, 
-        await createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff),
-    )));
+    await sendPacket(await createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff));
     console.log("telemetry sent");
 }
 
