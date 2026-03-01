@@ -70,7 +70,7 @@ client.on("message", async (topic, message) => {
 
     if (envelope.gatewayId !== env.MSH_GATEWAY) return;
 
-    await handleIncomingPacket(env, topic);
+    await handleIncomingPacket(envelope, topic);
 });
 
 const DEFAULT_CHANNEL = "LongFast";
