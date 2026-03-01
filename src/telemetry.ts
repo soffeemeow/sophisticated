@@ -15,6 +15,14 @@ export interface LocalStats {
     numRxDupe?: number;
 }
 
+export interface DeviceMetrics {
+    batteryLevel?: number;
+    voltage?: number;
+    channelUtilization?: number;
+    airUtilTx?: number;
+    uptimeSeconds?: number;
+}
+
 // #FIXME lol this will definitely gonna be affected by race conditions but oh well ;p
 const counters = {
     numPacketsTx: 0,
@@ -73,6 +81,13 @@ export function getLocalStats() {
         heapFreeBytes: mem.heapTotal - mem.heapUsed,
         ...counters,
     } as LocalStats;
+}
+
+export function getDeviceMetrics() {
+    return {
+        batteryLevel: 101,
+        uptimeSeconds: Math.floor(process.uptime()),
+    } as DeviceMetrics;
 }
 
 export {

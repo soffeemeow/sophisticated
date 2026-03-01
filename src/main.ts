@@ -3,9 +3,9 @@ import * as Protobuf from "@meshtastic/protobufs";
 import * as env from './env.js';
 import * as mqtt from './mqtt.js';
 import { formatPacketLog } from './utils.js';
-import { createNodeInfoResponse, createPositionResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
+import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
-import { counters, getEnvironmentMetrics } from './telemetry.js';
+import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
 
@@ -88,12 +88,20 @@ async function sendPosition() {
     console.log("position sent");
 }
 
-async function sendTelemetry() {
+async function sendEnvironmentMetrics() {
     const metrics = await getEnvironmentMetrics();
     if (!metrics) return;
 
     await mqtt.sendPacket(createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
-    console.log("telemetry sent");
+    console.log("environment metrics sent");
+}
+
+async function sendDeviceMetrics() {
+    const metrics = await getDeviceMetrics();
+    if (!metrics) return;
+
+    await mqtt.sendPacket(await createTelemetryDeviceMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
+    console.log("device metrics sent");
 }
 
 async function sendTraceroute(dest: number) {
@@ -115,12 +123,14 @@ async function sendTraceroute(dest: number) {
 setInterval(async () => {
     await sendNodeInfo();
     await sendPosition();
+    await sendDeviceMetrics();
 }, 3600 * 1000);
 
 setInterval(async () => {
-    await sendTelemetry();
+    await sendEnvironmentMetrics();
 }, 300 * 1000);
 
 await sendNodeInfo();
 await sendPosition();
-await sendTelemetry();
+await sendEnvironmentMetrics();
+await sendDeviceMetrics();

@@ -2,7 +2,7 @@ import { create, toBinary } from "@bufbuild/protobuf";
 import * as Protobuf from "@meshtastic/protobufs";
 import { PacketBuilder } from "./packet_builder.js";
 import * as env from '../env.js';
-import type { EnvironmentMetrics, LocalStats } from "../telemetry.js";
+import type { DeviceMetrics, EnvironmentMetrics, LocalStats } from "../telemetry.js";
 
 export function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
     return new PacketBuilder()
@@ -110,6 +110,27 @@ export function createTelemetryLocalStatsResponse(channelId: string, destination
                     time: Math.floor(new Date().getTime() / 1000),
                     variant: {
                         case: "localStats",
+                        value: metrics
+                    }
+                })),
+                requestId,
+            }),
+        })
+        .build();
+}
+
+export function createTelemetryDeviceMetricsResponse(channelId: string, destination: number, metrics: DeviceMetrics, requestId: number = 0) {
+    return new PacketBuilder()
+        .setChannelId(channelId)
+        .setDestination(destination)
+        .setPayload({
+            case: "decoded",
+            value: create(Protobuf.Mesh.DataSchema, {
+                portnum: Protobuf.Portnums.PortNum.TELEMETRY_APP,
+                payload: toBinary(Protobuf.Telemetry.TelemetrySchema, create(Protobuf.Telemetry.TelemetrySchema, {
+                    time: Math.floor(new Date().getTime() / 1000),
+                    variant: {
+                        case: "deviceMetrics",
                         value: metrics
                     }
                 })),
