@@ -3,9 +3,9 @@ import * as Protobuf from "@meshtastic/protobufs";
 import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket } from "./utils.js";
 import * as mqtt from './mqtt.js';
 import * as env from './env.js';
-import { createNodeInfoResponse, createPositionResponse, createTelemetryEnvironmentMetricsResponse } from "./packets/response.js";
+import { createNodeInfoResponse, createPositionResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse } from "./packets/response.js";
 import { PacketBuilder } from "./packets/packet_builder.js";
-import { getEnvironmentMetrics } from "./telemetry.js";
+import { getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
 
 async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
@@ -23,6 +23,12 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
 
                 await mqtt.sendPacket(await createTelemetryEnvironmentMetricsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
                 return;
+            }
+            case "localStats": {
+                const metrics = await getLocalStats();
+                if (!metrics) return;
+
+                await mqtt.sendPacket(await createTelemetryLocalStatsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
             }
             default: {
                 console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] unsupported telemetry request`);

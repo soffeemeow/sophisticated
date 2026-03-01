@@ -5,7 +5,7 @@ import * as mqtt from './mqtt.js';
 import { formatPacketLog } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
-import { getEnvironmentMetrics } from './telemetry.js';
+import { counters, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
 
@@ -56,10 +56,13 @@ setInterval(() => {
 }, 60 * 1000);
 
 client.on("message", async (topic, message) => {
+    counters.numPacketsRx++;
+
     const envelope = fromBinary(Protobuf.Mqtt.ServiceEnvelopeSchema, message);
 
     const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
     if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {
+        counters.numRxDupe++;
         console.log(formatPacketLog(topic, envelope), `duplicate packet with id=${packetInfo.id}, throwing away.`);
         return;
     } else {

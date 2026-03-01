@@ -6,6 +6,22 @@ export interface EnvironmentMetrics {
     barometricPressure?: number;
 }
 
+export interface LocalStats {
+    uptimeSeconds?: number;
+    heapTotalBytes?: number;
+    heapFreeBytes?: number;
+    numPacketsTx?: number;
+    numPacketsRx?: number;
+    numRxDupe?: number;
+}
+
+// #FIXME lol this will definitely gonna be affected by race conditions but oh well ;p
+const counters = {
+    numPacketsTx: 0,
+    numPacketsRx: 0,
+    numRxDupe: 0,
+}
+
 async function queryPrometheus(query: string, time: Date = new Date()) {
     if (!env.PROMETHEUS_URL) {
         throw new Error("PROMETHEUS_URL is not defined");
@@ -47,4 +63,18 @@ export async function getEnvironmentMetrics() {
         temperature: parseFloat(temperatureResult.result[0].value[1]),
         barometricPressure: parseFloat(pressureResult.result[0].value[1]),
     } as EnvironmentMetrics;
+}
+
+export function getLocalStats() {
+    const mem = process.memoryUsage();
+    return {
+        uptimeSeconds: Math.floor(process.uptime()),
+        heapTotalBytes: mem.heapTotal,
+        heapFreeBytes: mem.heapTotal - mem.heapUsed,
+        ...counters,
+    } as LocalStats;
+}
+
+export {
+    counters,
 }
