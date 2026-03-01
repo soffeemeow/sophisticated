@@ -1,0 +1,6 @@
+services:
+  msh-node:
+    build:
+      context: .
+    env_file:
+      - .env
