@@ -3,7 +3,7 @@ import * as Protobuf from "@meshtastic/protobufs";
 import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket } from "./utils.js";
 import * as mqtt from './mqtt.js';
 import * as env from './env.js';
-import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse } from "./packets/response.js";
+import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse, createTextResponse } from "./packets/response.js";
 import { PacketBuilder } from "./packets/packet_builder.js";
 import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
 
@@ -106,7 +106,7 @@ async function handlePositionApp(envelope: any, receivedTopic: string) {
 export interface TextMessageContext {
     packet: IncomingPacket;
     message: string;
-    isEncrypted: boolean;
+    isEncrypted: boolean;   
 }
 
 export interface TextCommandHandler {
@@ -132,7 +132,7 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
 
     console.log(formatPacketLog("TextMessageApp", envelope), msg);
 
-    for(const h of TextCommandHandlers) {
+    for (const h of TextCommandHandlers) {
         const ctx = {
                 packet: envelopeToIncomingPacket(envelope),
                 message: msg,
@@ -140,11 +140,12 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
         };
         try {
             if (h.test(ctx)) {
+                console.log(`found handler for request: ${h.name ?? "unnamed"}`);
                 await h.handler(ctx);
             }
         } catch (e) {
             console.error(`Error in TextCommandHandler (${h.name ?? "unnamed"}):`, e);
-            return;
+            continue;
         }
     }
 }
@@ -172,6 +173,54 @@ export async function handleIncomingPacket(envelope: any, receivedTopic: string)
     }
 }
 
-export {
-    TextCommandHandlers,
-}
+TextCommandHandlers.push({
+    name: "ping",
+    test: (ctx) => {
+        if (ctx.isEncrypted) return false;
+        if (ctx.packet.channelId !== "Services") return false;
+
+        const msg = ctx.message.toLowerCase();
+        return msg === "пинг" || msg === "ping";
+    },
+    handler: async (ctx) => {
+        const hops = ctx.packet.hopStart - ctx.packet.hopLimit;
+
+        let response;
+        if (ctx.packet.sender === env.MSH_GATEWAY) {
+            response = `Pong to ${ctx.packet.sender} 🔌 (GW)`;
+        } else {
+            if (hops > 0) {
+                response = `Pong to ${ctx.packet.sender} 🕸️ (Hops: ${hops}/${ctx.packet.hopStart})`;
+            } else {
+                response = `Pong to ${ctx.packet.sender} 📡 (S: ${ctx.packet.rxSnr}, R: ${ctx.packet.rxRssi})`;
+            }
+        }
+
+        await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
+    }
+});
+
+TextCommandHandlers.push({
+    name: "weather",
+    test: (ctx) => {
+        if (ctx.isEncrypted) return false;
+        if (!["Services", "LongFast"].includes(ctx.packet.channelId)) return false;
+
+        const msg = ctx.message.toLowerCase();
+        return msg === "weather" || msg === "погода";
+    },
+    handler: async (ctx) => {
+        let response;
+        try {
+            const metrics = await getEnvironmentMetrics();
+            if (!metrics || !metrics.temperature || !metrics.barometricPressure) return;
+
+            response = `На улице: 🌡️ ${metrics.temperature.toFixed(2)} °C, ☁️ ${metrics.barometricPressure.toFixed(2)} mmHg`
+        } catch (e) {
+            console.error("prometheus query failed:", e);
+            return;
+        }
+
+        await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
+    }
+});
