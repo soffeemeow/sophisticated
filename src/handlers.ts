@@ -215,7 +215,7 @@ TextCommandHandlers.push({
             const metrics = await getEnvironmentMetrics();
             if (!metrics || !metrics.temperature || !metrics.barometricPressure) return;
 
-            response = `На улице: 🌡️ ${metrics.temperature.toFixed(2)} °C, ☁️ ${metrics.barometricPressure.toFixed(2)} mmHg`
+            response = `На улице: 🌡️ ${metrics.temperature.toFixed(2)} °C, ☁️ ${(metrics.barometricPressure / 1.333224).toFixed(2)} mmHg`
         } catch (e) {
             console.error("prometheus query failed:", e);
             return;
