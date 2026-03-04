@@ -11,6 +11,8 @@ const MSH_POS_ALT = process.env.MSH_POS_ALT;
 
 const PROMETHEUS_URL = process.env.PROMETHEUS_URL;
 
+const IS_DEV_ENVIRONMENT = process.env.ENVIRONMENT === "dev";
+
 export {
     MQTT_TOPIC,
     MSH_GATEWAY,
@@ -21,4 +23,5 @@ export {
     MSH_POS_LON,
     MSH_POS_ALT,
     PROMETHEUS_URL,
+    IS_DEV_ENVIRONMENT,
 }

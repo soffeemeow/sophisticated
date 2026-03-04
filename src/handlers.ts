@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as Protobuf from "@meshtastic/protobufs";
-import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket } from "./utils.js";
+import * as meshtastic from './meshtastic.js';
+import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
 import * as env from './env.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse, createTextResponse } from "./packets/response.js";
@@ -11,7 +11,7 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
-    let telemetry = fromBinary(Protobuf.Telemetry.TelemetrySchema, envelope.packet.payloadVariant.value.payload);
+    let telemetry = fromBinary(meshtastic.Telemetry.TelemetrySchema, envelope.packet.payloadVariant.value.payload);
 
     console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] at ${new Date(telemetry.time * 1000).toISOString()}`, telemetry.variant.value);
     
@@ -47,11 +47,11 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     }
 }
 
-async function handleTracerouteApp(envelope: any, receivedTopic: string) {
+async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
-    let routeDiscovery = fromBinary(Protobuf.Mesh.RouteDiscoverySchema, envelope.packet.payloadVariant.value.payload);
+    let routeDiscovery = fromBinary(meshtastic.Mesh.RouteDiscoverySchema, envelope.packet.payloadVariant.value.payload);
 
     console.log(formatPacketLog("TracerouteApp", envelope), routeDiscovery);
     
@@ -66,9 +66,9 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
                 .setDestination(envelope.packet.from)
                 .setPayload({
                     case: "decoded",
-                    value: create(Protobuf.Mesh.DataSchema, {
-                        portnum: Protobuf.Portnums.PortNum.TRACEROUTE_APP,
-                        payload: toBinary(Protobuf.Mesh.RouteDiscoverySchema, routeDiscovery),
+                    value: create(meshtastic.Mesh.DataSchema, {
+                        portnum: meshtastic.Portnums.PortNum.TRACEROUTE_APP,
+                        payload: toBinary(meshtastic.Mesh.RouteDiscoverySchema, routeDiscovery),
                         requestId: envelope.packet.id,
                     }),
                 })
@@ -77,11 +77,11 @@ async function handleTracerouteApp(envelope: any, receivedTopic: string) {
     }
 }
 
-async function handleNodeInfoApp(envelope: any, receivedTopic: string) {
+async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
-    let nodeInfo = fromBinary(Protobuf.Mesh.UserSchema, envelope.packet.payloadVariant.value.payload);
+    let nodeInfo = fromBinary(meshtastic.Mesh.UserSchema, envelope.packet.payloadVariant.value.payload);
 
     console.log(formatPacketLog("NodeInfoApp", envelope), `${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel}`);
     
@@ -90,15 +90,19 @@ async function handleNodeInfoApp(envelope: any, receivedTopic: string) {
     }
 }
 
-async function handlePositionApp(envelope: any, receivedTopic: string) {
+async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
-    let position = fromBinary(Protobuf.Mesh.PositionSchema, envelope.packet.payloadVariant.value.payload);
+    let position = fromBinary(meshtastic.Mesh.PositionSchema, envelope.packet.payloadVariant.value.payload);
 
-    console.log(formatPacketLog("PositionApp", envelope), `LAT: ${position.latitudeI * 1e-7}, LON: ${position.latitudeI * 1e-7}, ALT: ${position.altitude}, SRC: ${position.locationSource}`);
+    const la = position.latitudeI !== undefined ? position.latitudeI * 1e-7 : "-";
+    const lo = position.longitudeI !== undefined ? position.longitudeI * 1e-7 : "-";
+    const alt = position.altitude ?? "-";
+
+    console.log(formatPacketLog("PositionApp", envelope), `LAT: ${la}, LON: ${lo}, ALT: ${alt}, SRC: ${position.locationSource}`);
     
-    if (envelope.to === stringUidToNumber(env.MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
+    if (envelope.packet.to === stringUidToNumber(env.MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
         await mqtt.sendPacket(createPositionResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
     }
 }
@@ -150,26 +154,37 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
     }
 }
 
-export async function handleIncomingPacket(envelope: any, receivedTopic: string) {
-    switch (envelope.packet.payloadVariant.value.portnum) {
-        case Protobuf.Portnums.PortNum.TEXT_MESSAGE_APP: {
-            return await handleTextMessageApp(envelope, receivedTopic);
+export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+    if (envelope.packet.payloadVariant.case === "decoded") {
+        switch (envelope.packet.payloadVariant.value.portnum) {
+            case meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP: {
+                return await handleTextMessageApp(envelope, receivedTopic);
+            }
+            case meshtastic.Portnums.PortNum.NODEINFO_APP: {
+                return await handleNodeInfoApp(envelope, receivedTopic);
+            }
+            case meshtastic.Portnums.PortNum.POSITION_APP: {
+                return await handlePositionApp(envelope, receivedTopic);
+            }
+            case meshtastic.Portnums.PortNum.TRACEROUTE_APP: {
+                return await handleTracerouteApp(envelope, receivedTopic);
+            }
+            case meshtastic.Portnums.PortNum.TELEMETRY_APP: {
+                return await handleTelemetryApp(envelope, receivedTopic);
+            }
+            default: {
+                console.log(formatPacketLog(receivedTopic, envelope), envelope, envelope.packet.payloadVariant);
+            }
         }
-        case Protobuf.Portnums.PortNum.NODEINFO_APP: {
-            return await handleNodeInfoApp(envelope, receivedTopic);
-        }
-        case Protobuf.Portnums.PortNum.POSITION_APP: {
-            return await handlePositionApp(envelope, receivedTopic);
-        }
-        case Protobuf.Portnums.PortNum.TRACEROUTE_APP: {
-            return await handleTracerouteApp(envelope, receivedTopic);
-        }
-        case Protobuf.Portnums.PortNum.TELEMETRY_APP: {
-            return await handleTelemetryApp(envelope, receivedTopic);
-        }
-        default: {
-            console.log(formatPacketLog(receivedTopic, envelope), envelope, envelope.packet.payloadVariant);
-        }
+        return;
+    }
+    if (envelope.packet.payloadVariant.case === "encrypted") {
+        console.log(formatPacketLog(receivedTopic, envelope), "received encrypted message");
+        return;
+    }
+    if (envelope.packet.payloadVariant.case === undefined) {
+        console.log(formatPacketLog(receivedTopic, envelope), "received message with empty payload");
+        return;
     }
 }
 

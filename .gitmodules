@@ -1,0 +1,4 @@
+[submodule "meshtastic-protobufs"]
+	path = proto/meshtastic
+	url = https://github.com/meshtastic/protobufs.git
+	branch = v2.7.18

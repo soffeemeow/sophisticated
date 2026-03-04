@@ -1,13 +1,17 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as Protobuf from "@meshtastic/protobufs";
 import * as env from './env.js';
 import * as mqtt from './mqtt.js';
-import { formatPacketLog } from './utils.js';
+import { envelopeHasPacket, formatPacketLog } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
+import * as meshtastic from './meshtastic.js';
+
+if (env.IS_DEV_ENVIRONMENT) {
+    console.log("[!!!!!!!!!] packet hop_limit and hop_start will be overriden to 0 on outgoing packets because environment is development.");
+}
 
 class ReceivedPacketInfo {
     constructor(
@@ -58,7 +62,21 @@ setInterval(() => {
 client.on("message", async (topic, message) => {
     counters.numPacketsRx++;
 
-    const envelope = fromBinary(Protobuf.Mqtt.ServiceEnvelopeSchema, message);
+    const envelope = fromBinary(meshtastic.Mqtt.ServiceEnvelopeSchema, message);
+
+    if (envelope.gatewayId === env.MSH_UID) {
+        return;
+    }
+
+    if (envelope.gatewayId !== env.MSH_GATEWAY) {
+        console.log(formatPacketLog(topic, envelope), `received message from unknown gateway, throwing away.`);
+        return;
+    }
+
+    if (!envelopeHasPacket(envelope)) {
+        console.log(formatPacketLog(topic, envelope), `received message without packet inside, throwing away.`);
+        return;
+    }
 
     const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
     if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {
@@ -71,10 +89,9 @@ client.on("message", async (topic, message) => {
 
     // console.log(topic, envelope);
 
-    if (envelope.gatewayId !== env.MSH_GATEWAY) return;
-
     await handleIncomingPacket(envelope, topic);
 });
+
 
 const DEFAULT_CHANNEL = "LongFast";
 
@@ -111,9 +128,9 @@ async function sendTraceroute(dest: number) {
             .setDestination(dest)
             .setPayload({
                 case: "decoded",
-                value: create(Protobuf.Mesh.DataSchema, {
-                    portnum: Protobuf.Portnums.PortNum.TRACEROUTE_APP,
-                    payload: toBinary(Protobuf.Mesh.RouteDiscoverySchema, create(Protobuf.Mesh.RouteDiscoverySchema, {})),
+                value: create(meshtastic.Mesh.DataSchema, {
+                    portnum: meshtastic.Portnums.PortNum.TRACEROUTE_APP,
+                    payload: toBinary(meshtastic.Mesh.RouteDiscoverySchema, create(meshtastic.Mesh.RouteDiscoverySchema, {})),
                 }),
             })
             .build()

@@ -11,9 +11,6 @@ importers:
       '@bufbuild/protobuf':
         specifier: ^2.11.0
         version: 2.11.0
-      '@meshtastic/protobufs':
-        specifier: ^2.7.8
-        version: 2.7.8
       dotenv-cli:
         specifier: ^8.0.0
         version: 8.0.0
@@ -264,9 +261,6 @@ packages:
     engines: {node: '>=18'}
     cpu: [x64]
     os: [win32]
-
-  '@meshtastic/protobufs@2.7.8':
-    resolution: {integrity: sha512-Itn6sNVDvmSA6jsbqZWDScGbXkUUF3+bfJWKbdx5aA3+1tJiXas7I6aeC/aJPa1HelxLvBT3KO63jSgS1Pk83w==}
 
   '@types/node@25.2.0':
     resolution: {integrity: sha512-DZ8VwRFUNzuqJ5khrvwMXHmvPe+zGayJhr2CDNiKB1WBE1ST8Djl00D0IC4vvNmHMdj6DlbYRIaFE7WHjlDl5w==}
@@ -659,10 +653,6 @@ snapshots:
 
   '@esbuild/win32-x64@0.27.2':
     optional: true
-
-  '@meshtastic/protobufs@2.7.8':
-    dependencies:
-      '@bufbuild/protobuf': 2.11.0
 
   '@types/node@25.2.0':
     dependencies:

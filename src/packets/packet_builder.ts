@@ -1,5 +1,5 @@
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as Protobuf from "@meshtastic/protobufs";
+import { create } from "@bufbuild/protobuf";
+import * as meshtastic from '../meshtastic.js';
 import { stringUidToNumber } from "../utils.js";
 import * as env from '../env.js';
 
@@ -49,10 +49,10 @@ export class PacketBuilder {
             this.packetId = Math.floor(Math.random() * 3914268768);
         }
 
-        return create(Protobuf.Mqtt.ServiceEnvelopeSchema, {
+        return create(meshtastic.Mqtt.ServiceEnvelopeSchema, {
             channelId: this.channelId,
             gatewayId: env.MSH_UID,
-            packet: create(Protobuf.Mesh.MeshPacketSchema, {
+            packet: create(meshtastic.Mesh.MeshPacketSchema, {
                 id: this.packetId,
                 from: stringUidToNumber(env.MSH_UID),
                 to: this.destination,

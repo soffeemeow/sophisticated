@@ -1,3 +1,8 @@
+import * as meshtastic from './meshtastic.js';
+
+export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
+export type RequiredBy<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
+
 export function toStringUserId(value: number) {
     return "!" + value.toString(16).padStart(8, "0");
 }
@@ -47,4 +52,8 @@ export function envelopeToIncomingPacket(envelope: any): IncomingPacket {
         rxSnr: envelope.packet.rxSnr,
         rxRssi: envelope.packet.rxRssi,
     };
+}
+
+export function envelopeHasPacket(envelope: meshtastic.Mqtt.ServiceEnvelope): envelope is RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet"> {
+    return envelope.packet !== undefined;
 }
