@@ -3,10 +3,11 @@ WORKDIR /build
 
 RUN apk add python3 make g++ && corepack enable
 
-COPY package*.json pnpm*.yaml tsconfig.json ./
+COPY package*.json pnpm*.yaml tsconfig.json buf.gen.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY src ./src
+COPY proto ./proto
 RUN pnpm run build && pnpm prune --prod
 
 FROM node:22-alpine AS final

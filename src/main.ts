@@ -91,7 +91,7 @@ client.on("message", async (topic, message) => {
         channel: envelope.channelId,
         from: toStringUserId(envelope.packet.from),
         to: toStringUserId(envelope.packet.to),
-        relayNode: envelope.packet.relayNode.toString(16),
+        relayNode: envelope.packet.relayNode.toString(16).padStart(2, "0"),
         port: envelope.packet.payloadVariant.case === "decoded" ? envelope.packet.payloadVariant.value.portnum : 0,
     };
     
