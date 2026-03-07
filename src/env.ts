@@ -13,6 +13,9 @@ const PROMETHEUS_URL = process.env.PROMETHEUS_URL;
 
 const IS_DEV_ENVIRONMENT = process.env.ENVIRONMENT === "dev";
 
+const METRICS_LISTEN_HOST = process.env.METRICS_LISTEN_HOST;
+const METRICS_LISTEN_PORT = process.env.METRICS_LISTEN_PORT;
+
 export {
     MQTT_TOPIC,
     MSH_GATEWAY,
@@ -24,4 +27,6 @@ export {
     MSH_POS_ALT,
     PROMETHEUS_URL,
     IS_DEV_ENVIRONMENT,
+    METRICS_LISTEN_HOST,
+    METRICS_LISTEN_PORT,
 }

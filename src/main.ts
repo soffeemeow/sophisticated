@@ -1,17 +1,25 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as env from './env.js';
 import * as mqtt from './mqtt.js';
-import { envelopeHasPacket, formatPacketLog } from './utils.js';
+import { envelopeHasPacket, formatPacketLog, toStringUserId } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
 import * as meshtastic from './meshtastic.js';
+import { getRegistry, initMeshtasticRxMetrics, initMetrics } from "./metrics/metrics.js";
 
 if (env.IS_DEV_ENVIRONMENT) {
     console.log("[!!!!!!!!!] packet hop_limit and hop_start will be overriden to 0 on outgoing packets because environment is development.");
 }
+
+console.log("Initializing Prometheus Metrics...");
+initMetrics();
+
+const metricsRegistry = getRegistry();
+const rxMetrics = initMeshtasticRxMetrics(metricsRegistry);
+mqtt.initMqttTxMetrics(metricsRegistry);
 
 class ReceivedPacketInfo {
     constructor(
@@ -77,6 +85,27 @@ client.on("message", async (topic, message) => {
         console.log(formatPacketLog(topic, envelope), `received message without packet inside, throwing away.`);
         return;
     }
+
+    const labels = {
+        gateway: envelope.gatewayId,
+        channel: envelope.channelId,
+        from: toStringUserId(envelope.packet.from),
+        to: toStringUserId(envelope.packet.to),
+        relayNode: envelope.packet.relayNode.toString(16),
+        port: envelope.packet.payloadVariant.case === "decoded" ? envelope.packet.payloadVariant.value.portnum : 0,
+    };
+    
+    const histogramLabels = {
+        gateway: labels.gateway,
+        from: labels.from,
+        relayNode: labels.relayNode,
+    }
+
+    rxMetrics.mesh_packets_received_counter.inc(labels);
+
+    rxMetrics.mesh_packets_received_hops_histogram.observe(histogramLabels, envelope.packet.hopStart - envelope.packet.hopLimit);
+    rxMetrics.mesh_packets_received_rssi_histogram.observe(histogramLabels, envelope.packet.rxRssi);
+    rxMetrics.mesh_packets_received_snr_histogram.observe(histogramLabels, envelope.packet.rxSnr);
 
     const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
     if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {
