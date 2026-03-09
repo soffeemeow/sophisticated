@@ -200,14 +200,19 @@ TextCommandHandlers.push({
     handler: async (ctx) => {
         const hops = ctx.packet.hopStart - ctx.packet.hopLimit;
 
-        let response;
+        let response = `Pong to ${ctx.packet.sender}` + " ";
+
         if (ctx.packet.sender === env.MSH_GATEWAY) {
-            response = `Pong to ${ctx.packet.sender} 🔌 (GW)`;
+            response += `🔌 (GW)`;
         } else {
             if (hops > 0) {
-                response = `Pong to ${ctx.packet.sender} 🕸️ (Hops: ${hops}/${ctx.packet.hopStart})`;
+                if (hops === 6 && ctx.packet.hopStart === 7) {
+                    response += `🕸️ (Hops: SIX/SEVEEEEEN!!!)`;
+                } else {
+                    response += `🕸️ (Hops: ${hops}/${ctx.packet.hopStart})`;
+                }
             } else {
-                response = `Pong to ${ctx.packet.sender} 📡 (S: ${ctx.packet.rxSnr}, R: ${ctx.packet.rxRssi})`;
+                response = `📡 (S: ${ctx.packet.rxSnr}, R: ${ctx.packet.rxRssi})`;
             }
         }
 
