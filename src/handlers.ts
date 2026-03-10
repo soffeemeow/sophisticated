@@ -188,6 +188,23 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
     }
 }
 
+function getPingStatusMessage(packet: IncomingPacket) {
+    const hops = packet.hopStart - packet.hopLimit;
+    if (packet.sender === env.MSH_GATEWAY) {
+        return "🔌 (GW)";
+    }
+    
+    if (hops === 0) {
+        return `📡 (S: ${packet.rxSnr}, R: ${packet.rxRssi})`;
+    }
+
+    if (hops === 6 && packet.hopStart === 7) {
+        return "🕸️ (Hops: SIX/SEVEEEEEN!!!)";
+    }
+
+    return `🕸️ (Hops: ${hops}/${packet.hopStart})`;
+}
+
 TextCommandHandlers.push({
     name: "ping",
     test: (ctx) => {
@@ -198,24 +215,7 @@ TextCommandHandlers.push({
         return msg === "пинг" || msg === "ping";
     },
     handler: async (ctx) => {
-        const hops = ctx.packet.hopStart - ctx.packet.hopLimit;
-
-        let response = `Pong to ${ctx.packet.sender}` + " ";
-
-        if (ctx.packet.sender === env.MSH_GATEWAY) {
-            response += `🔌 (GW)`;
-        } else {
-            if (hops > 0) {
-                if (hops === 6 && ctx.packet.hopStart === 7) {
-                    response += `🕸️ (Hops: SIX/SEVEEEEEN!!!)`;
-                } else {
-                    response += `🕸️ (Hops: ${hops}/${ctx.packet.hopStart})`;
-                }
-            } else {
-                response = `📡 (S: ${ctx.packet.rxSnr}, R: ${ctx.packet.rxRssi})`;
-            }
-        }
-
+        const response = `Pong to ${ctx.packet.sender} ${getPingStatusMessage(ctx.packet)}`;
         await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
     }
 });
