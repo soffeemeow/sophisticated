@@ -6,29 +6,70 @@ import type { NodeInfoStorage } from './node_db.js';
 
 type JDBNode = Omit<meshtastic.Mesh.NodeInfo, "$typeName" | "$unknown" | "num" | "user" | "position" | "deviceMetrics">
 type JDBUser = Omit<meshtastic.Mesh.User, "$typeName" | "$unknown" | "id" | "macaddr" | "role" | "hwModel" | "publicKey"> & { role: number, hwModel: number, publicKey: string }
-type Defaults = { JDBNode: Required<JDBNode>, JDBUser: Required<JDBUser> }
 
-const Defaults: Defaults = {
-    JDBNode: {
-        snr: 0,
-        lastHeard: 0,
-        channel: 0,
+type TypeOf<T> = 
+    T extends string    ? "string"    : 
+    T extends number    ? "number"    :
+    T extends bigint    ? "bigint"    :
+    T extends boolean   ? "boolean"   :
+    T extends symbol    ? "symbol"    :
+    T extends undefined ? "undefined" :
+    T extends Function  ? "function"  :
+    T extends object    ? "object"    : unknown;
+
+type ObjectSchema<T> = {
+    optional: {
+        [P in keyof Required<T>]: T extends Record<P, T[P]> ? false : true
+    }
+    types: {
+        [P in keyof Required<T>]: TypeOf<T[P]>;
+    }
+};
+
+const JDBNodeSchema: ObjectSchema<JDBNode> = {
+    optional: {
+        snr: false,
+        lastHeard: false,
+        channel: false,
         viaMqtt: false,
-        hopsAway: 0,
+        hopsAway: true,
         isFavorite: false,
         isIgnored: false,
         isKeyManuallyVerified: false,
         isMuted: false
     },
-    JDBUser: {
-        longName: '',
-        shortName: '',
+    types: {
+        snr: 'number',
+        lastHeard: 'number',
+        channel: 'number',
+        viaMqtt: 'boolean',
+        hopsAway: 'number',
+        isFavorite: 'boolean',
+        isIgnored: 'boolean',
+        isKeyManuallyVerified: 'boolean',
+        isMuted: 'boolean'
+    }
+}
+
+const JDBUserSchema: ObjectSchema<JDBUser> = {
+    optional: {
+        longName: false,
+        shortName: false,
         isLicensed: false,
-        publicKey: '',
-        isUnmessagable: false,
-        role: 0,
-        hwModel: 0
+        isUnmessagable: true,
+        role: false,
+        hwModel: false,
+        publicKey: false
     },
+    types: {
+        longName: 'string',
+        shortName: 'string',
+        isLicensed: 'boolean',
+        isUnmessagable: 'boolean',
+        role: 'number',
+        hwModel: 'number',
+        publicKey: 'string'
+    }
 }
 
 export class JSONNodeDB implements NodeInfoStorage {
@@ -58,20 +99,23 @@ export class JSONNodeDB implements NodeInfoStorage {
         });
     }
 
-    private validate<T>(data: any, ref: T): T {
+    private validate<T>(data: any, schema: ObjectSchema<T>): T {
         if (typeof data !== "object") {
             throw new Error("is not an object");
         }
         
-        for (const k in ref) {
-            if (!(k in data)) {
+        for (const k in schema.types) {
+            if (!schema.optional[k] && !(k in data)) {
                 throw new Error(`has no '${k}' field`);
             }
             
-            const refFieldType = typeof ref[k as keyof T];
+            const refFieldType = schema.types[k];
             const actualFieldType = typeof data[k];
 
             if (actualFieldType !== refFieldType) {
+                if (actualFieldType === "undefined" && schema.optional[k]) {
+                    continue;
+                }
                 throw new Error(`field '${k}' is expected to be ${refFieldType}, but found ${actualFieldType}`);
             }
         }
@@ -98,7 +142,7 @@ export class JSONNodeDB implements NodeInfoStorage {
 
         for (const n in data.nodes) {
             try {
-                const node = this.validate(data.nodes[n], Defaults.JDBNode);
+                const node = this.validate(data.nodes[n], JDBNodeSchema);
                 this.nodes.set(n, node);
             } catch (e) {
                 throw new Error(`Failed to load JSON NodeDB: .nodes['${n}'] is invalid: ${e}`);
@@ -107,7 +151,7 @@ export class JSONNodeDB implements NodeInfoStorage {
 
         for (const u in data.users) {
             try {
-                const user = this.validate(data.users[u], Defaults.JDBUser);
+                const user = this.validate(data.users[u], JDBUserSchema);
                 this.nodeUsers.set(u, user);
             } catch (e) {
                 throw new Error(`Failed to load JSON NodeDB: .users['${u}'] is invalid: ${e}`);
@@ -149,7 +193,6 @@ export class JSONNodeDB implements NodeInfoStorage {
 
         const node = this.nodes.get(stringId);
         if (!node) return undefined;
-        
         const user = this.getUser(stringId) ?? {};
 
         return create(meshtastic.Mesh.NodeInfoSchema, {
@@ -177,7 +220,7 @@ export class JSONNodeDB implements NodeInfoStorage {
     public updateNode(id: string | number, data: meshtastic.Mesh.NodeInfo) {
         const stringId = typeof id === "string" ? id : toStringUserId(id);
 
-        this.nodes.set(stringId, {
+        const node: JDBNode = {
             snr: data.snr,
             lastHeard: data.lastHeard,
             channel: data.channel,
@@ -186,23 +229,29 @@ export class JSONNodeDB implements NodeInfoStorage {
             isIgnored: data.isIgnored,
             isKeyManuallyVerified: data.isKeyManuallyVerified,
             isMuted: data.isMuted,
-        });
+        };
 
+        if (data.hopsAway !== undefined) {
+            node.hopsAway = data.hopsAway;
+        }
+
+        this.nodes.set(stringId, node);
         this.isDirty = true;
     }
 
     public updateUser(id: string | number, data: meshtastic.Mesh.User) {
         const stringId = typeof id === "string" ? id : toStringUserId(id);
 
-        this.nodeUsers.set(stringId, {
+        const user: JDBUser = {
             longName: data.longName,
             shortName: data.shortName,
             hwModel: data.hwModel,
             isLicensed: data.isLicensed,
             role: data.role,
             publicKey: Buffer.from(data.publicKey).toString("base64"),
-        });
+        };
 
+        this.nodeUsers.set(stringId, user);
         this.isDirty = true;
     }
 }
