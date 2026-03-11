@@ -3,3 +3,5 @@ src/gen
 node_modules
 *.env
 *.msh
+nodedb.json
+sophisticated-nodedb.json

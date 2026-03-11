@@ -16,6 +16,8 @@ const IS_DEV_ENVIRONMENT = process.env.ENVIRONMENT === "dev";
 const METRICS_LISTEN_HOST = process.env.METRICS_LISTEN_HOST;
 const METRICS_LISTEN_PORT = process.env.METRICS_LISTEN_PORT;
 
+const JSON_NODEDB = process.env.JSON_NODEDB ?? "./sophisticated-nodedb.json";
+
 export {
     MQTT_TOPIC,
     MSH_GATEWAY,
@@ -29,4 +31,5 @@ export {
     IS_DEV_ENVIRONMENT,
     METRICS_LISTEN_HOST,
     METRICS_LISTEN_PORT,
+    JSON_NODEDB,
 }

@@ -6,6 +6,7 @@ import * as env from './env.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse, createTextResponse } from "./packets/response.js";
 import { PacketBuilder } from "./packets/packet_builder.js";
 import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
+import { nodedb } from "./nodedb/node_db.js";
 
 async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
@@ -154,7 +155,37 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
     }
 }
 
+function updateNodeDBInfo(packet: meshtastic.Mesh.MeshPacket) {
+    let node = nodedb.getNode(packet.from);
+    if (node === undefined) {
+        node = create(meshtastic.Mesh.NodeInfoSchema, {
+            isFavorite: false,
+            isIgnored: false,
+            isKeyManuallyVerified: false,
+            isMuted: false,
+        });
+    }
+
+    node.num = packet.from;
+    node.snr = packet.rxSnr;
+    node.lastHeard = Math.floor(new Date().getTime() / 1000);
+    node.viaMqtt = packet.viaMqtt;
+    node.hopsAway = packet.hopStart - packet.hopLimit;
+
+    nodedb.updateNode(node.num, node);
+
+
+    if (!packet.payloadVariant) return;
+    if (packet.payloadVariant.case !== "decoded") return;
+    if (packet.payloadVariant.value.portnum !== meshtastic.Portnums.PortNum.NODEINFO_APP) return;
+
+    const nodeInfo = fromBinary(meshtastic.Mesh.UserSchema, packet.payloadVariant.value.payload);
+    nodedb.updateUser(nodeInfo.id, nodeInfo);
+}
+
 export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+    updateNodeDBInfo(envelope.packet);
+    
     if (envelope.packet.payloadVariant.case === "decoded") {
         switch (envelope.packet.payloadVariant.value.portnum) {
             case meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP: {
