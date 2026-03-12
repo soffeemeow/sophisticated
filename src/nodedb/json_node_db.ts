@@ -130,14 +130,16 @@ export class JSONNodeDB implements NodeInfoStorage {
         }
 
         const json = fs.readFileSync(this.filePath, "utf-8");
-        const data = JSON.parse(json);
+        const data = JSON.parse(json) ?? {};
 
-        if (!data.nodes || (typeof data.nodes !== "object")) {
-            throw new Error("Failed to load JSON NodeDB: field 'nodes' does not exist or not a dictionary.");
+        if (!data.nodes) data.nodes = {};
+        if (typeof data.nodes !== "object") {
+            throw new Error("Failed to load JSON NodeDB: field 'nodes' is not a dictionary.");
         }
 
-        if (!data.users || (typeof data.users !== "object")) {
-            throw new Error("Failed to load JSON NodeDB: field 'users' does not exist or not a dictionary.");
+        if (!data.users) data.users = {};
+        if (typeof data.users !== "object") {
+            throw new Error("Failed to load JSON NodeDB: field 'users' is not a dictionary.");
         }
 
         for (const n in data.nodes) {
