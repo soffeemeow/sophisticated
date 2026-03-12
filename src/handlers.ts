@@ -275,3 +275,98 @@ TextCommandHandlers.push({
         await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
     }
 });
+
+interface AnimalNoise {
+    animal: string;
+    emoji: string[];
+    regexp: RegExp;
+}
+
+function wrapRegExp(regexp: RegExp) {
+    return new RegExp(
+        "(?:^|[^а-яА-Яa-zA-Z0-9])" +
+        `(?:${regexp.source})` +
+        "(?:$|[^а-яА-Яa-zA-Z0-9])", regexp.flags);
+}
+
+const animalNoises: AnimalNoise[] = [
+    {
+        animal: "cat",
+        emoji: ["🐱", "🐈", "🧶", "🐾"],
+        regexp: wrapRegExp(/мя+(?:ов|[ув]+)|мур+|me+o+w+/i),
+    },
+    {
+        animal: "dog",
+        emoji: ["🐶", "🐕", "🦴", "🐾"],
+        regexp: wrapRegExp(/га[вф]|woo+f|bark/i),
+    },
+    {
+        animal: "fox",
+        emoji: ["🦊", "🐾"],
+        regexp: wrapRegExp(/фы+р+/i),
+    },
+    {
+        animal: "frog",
+        emoji: ["🐸"],
+        regexp: wrapRegExp(/ква+к?/i),
+    },
+    {
+        animal: "crow",
+        emoji: ["🐦‍⬛"],
+        regexp: wrapRegExp(/кар+/i),
+    },
+    {
+        animal: "duck",
+        emoji: ["🦆"],
+        regexp: wrapRegExp(/кря+к?/i),
+    },
+    {
+        animal: "mouse",
+        emoji: ["🐭", "🐁", "🧀"],
+        regexp: wrapRegExp(/мыш[ьие]|пи(?:пи)+/i),
+    },
+];
+
+function findAnimalNoise(message: string) {
+    for (const a of animalNoises) {
+        if (a.regexp.test(message)) {
+            return a;
+        }
+    }
+}
+
+TextCommandHandlers.push({
+    name: "animals",
+    test: (ctx) => {
+        if (ctx.isEncrypted) return false;
+        if (!["LongFast", "test"].includes(ctx.packet.channelId)) return false;
+
+        return findAnimalNoise(ctx.message) !== undefined;
+    },
+    handler: async (ctx) => {
+        const animal = findAnimalNoise(ctx.message);
+        if (!animal) return;
+
+        const emojiIndex = Math.floor(Math.random() * animal.emoji.length)!;
+        const emoji = animal.emoji[emojiIndex];
+        if (!emoji) {
+            throw new Error("wtf");
+        }
+
+        const response = new PacketBuilder()
+            .setChannelId(ctx.packet.channelId)
+            .setDestination(0xffffffff)
+            .setPayload({
+                case: "decoded",
+                value: create(meshtastic.Mesh.DataSchema, {
+                    portnum: meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP,
+                    payload: Buffer.from(emoji),
+                    replyId: ctx.packet.id,
+                    emoji: Number(true),
+                }),
+        })
+        .build();
+
+        await mqtt.sendPacket(response);
+    }
+});
