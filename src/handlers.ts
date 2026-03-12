@@ -323,7 +323,7 @@ const animalNoises: AnimalNoise[] = [
     {
         animal: "mouse",
         emoji: ["🐭", "🐁", "🧀"],
-        regexp: wrapRegExp(/мыш[ьие]|пи(?:пи)+/i),
+        regexp: wrapRegExp(/мыш(?:[ьи]|ки|астики?)?|пи(?:пи)+/i),
     },
 ];
 
