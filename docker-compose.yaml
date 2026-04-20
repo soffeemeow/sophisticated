@@ -1,6 +1,79 @@
+configs:
+  mosquitto_config:
+    content: |
+      persistence true
+      persistence_location /mosquitto/data
+      allow_anonymous true
+      password_file /mosquitto/config/passwd
+      listener 1883
+      listener_allow_anonymous true
+
+  # passwords for both users are "meowmeow"
+  # also note that docker may try interpret something starting with '$' as a variable
+  # so you better escape it as '$$' until it works as intended
+  mosquitto_passwd:
+    content: |
+      sophisticated:$$7$$1000$$i0E1NE9s+jNBKxZ173o745tcivDAr9tdx0EHpZqsAkE0h4gowm5BrqbMA4PM1P9/pTjCDvU2iAXX/m1F8yEpBg==$$/jNH/O33FBUyJ4jA9jPuNhCHdpJq/vWq66Y0D4Q5HlRxWnbCx4akrRU4jmqz0pkJlq8E7di99fAHF09ac/0y/w==
+      meshtasticd:$$7$$1000$$ymKqoos+hiQhiQN3Qx7lmfKW0L9IZrdufwkKvI1T456LdDUlA3OmW5sifpbdsgt6FVu4XSpAQABfQu2uQGA4+g==$$F2djV37ypzlIr4lrKxDi03oZTlhcJxdNz9wVZC0cZeOSZbO/JZq+yBIXO3kkgoZDUuRv2JXUyen2WsVwOEuP8w==
+
+  meshtasticd_config:
+    content: |
+      General:
+        MACAddress: 67:67:67:67:67:67
+
 services:
+  mqtt-server:
+    restart: unless-stopped
+    image: eclipse-mosquitto:2.1.0-alpine
+    configs:
+      - source: mosquitto_config
+        target: /mosquitto/config/mosquitto.conf
+      - source: mosquitto_passwd
+        target: /mosquitto/config/passwd
+        uid: "1883"
+        gid: "1883"
+        mode: 0400
+    volumes:
+      - ./data/mosquitto/data:/mosquitto/data
+    ports:
+      - "1883:1883"
+
   msh-node:
+    restart: unless-stopped
+    depends_on:
+      - mqtt-server
     build:
       context: .
-    env_file:
-      - .env
+    environment:
+      - MQTT_ADDRESS=mqtt-server:1883
+      - MQTT_USER=sophisticated
+      - MQTT_PASSWORD=meowmeow
+      - MQTT_TOPIC=msh
+      - MSH_GATEWAY=!67676767
+      - MSH_UID=!69696969
+      - MSH_SHORT_NAME=🛸
+      - MSH_LONG_NAME=Sophisticated Dev 🛸
+      - JSON_NODEDB=/data/nodedb.json
+      - PRIVATE_KEY_PATH=/data/private.key
+    volumes:
+      - ./data/sophisticated/data:/data
+
+  meshtasticd:
+    restart: unless-stopped
+    depends_on: 
+      - mqtt-server
+    image: meshtastic/meshtasticd:2.7.18-alpha-alpine
+    volumes:
+      - ./data/meshtasticd/data:/var/lib/meshtasticd
+    configs:
+      - source: meshtasticd_config
+        target: /etc/meshtasticd/config.yaml
+    command:
+      - "meshtasticd"
+      # - "--sim"
+      - "--fsdir=/var/lib/meshtasticd"
+      - "--config=/etc/meshtasticd/config.yaml"
+    user: "1670:1670"
+    ports:
+      - "4403:4403"
+
