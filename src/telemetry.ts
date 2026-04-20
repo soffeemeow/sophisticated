@@ -61,6 +61,8 @@ async function queryPrometheus(query: string, time: Date = new Date()) {
 }
 
 export async function getEnvironmentMetrics() {
+    if (!env.PROMETHEUS_URL) return;
+
     const temperatureResult = await queryPrometheus(`avg_over_time(world_temperature{job="micrometeo", location="outside"}[1m])`);
     const pressureResult = await queryPrometheus(`avg_over_time(world_atmospheric_pressure{job="micrometeo", location="home"}[1m])`);
         
