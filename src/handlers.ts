@@ -7,6 +7,7 @@ import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMe
 import { PacketBuilder } from "./packets/packet_builder.js";
 import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
+import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
 
 async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
@@ -210,7 +211,21 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
         return;
     }
     if (envelope.packet.payloadVariant.case === "encrypted") {
-        console.log(formatPacketLog(receivedTopic, envelope), "received encrypted message");
+        if (!envelope.packet.pkiEncrypted) {
+            try {
+                const result = decryptPacket(defaultPSK, envelope.packet);
+                const data = fromBinary(meshtastic.Mesh.DataSchema, result);
+
+                envelope.packet.payloadVariant = {
+                    value: data,
+                    case: "decoded",
+                };
+
+                await handleIncomingPacket(envelope, receivedTopic);
+            } catch (e) {
+                console.log("failed to decrypt message", e);
+            }
+        }
         return;
     }
     if (envelope.packet.payloadVariant.case === undefined) {
