@@ -1,3 +1,4 @@
+data
 dist
 src/gen
 node_modules
@@ -5,3 +6,4 @@ node_modules
 *.msh
 nodedb.json
 sophisticated-nodedb.json
+private.key

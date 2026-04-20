@@ -9,6 +9,8 @@ const MSH_POS_LAT = process.env.MSH_POS_LAT;
 const MSH_POS_LON = process.env.MSH_POS_LON;
 const MSH_POS_ALT = process.env.MSH_POS_ALT;
 
+const MSH_IS_UNMESSAGEABLE = !!process.env.MSH_IS_UNMESSAGEABLE;
+
 const PROMETHEUS_URL = process.env.PROMETHEUS_URL;
 
 const IS_DEV_ENVIRONMENT = process.env.ENVIRONMENT === "dev";
@@ -17,6 +19,8 @@ const METRICS_LISTEN_HOST = process.env.METRICS_LISTEN_HOST;
 const METRICS_LISTEN_PORT = process.env.METRICS_LISTEN_PORT;
 
 const JSON_NODEDB = process.env.JSON_NODEDB ?? "./sophisticated-nodedb.json";
+const PRIVATE_KEY_PATH = process.env.PRIVATE_KEY_PATH ?? "./private.key"
+const ENABLE_ENCRYPTION = !!process.env.ENABLE_ENCRYPTION;
 
 export {
     MQTT_TOPIC,
@@ -32,4 +36,7 @@ export {
     METRICS_LISTEN_HOST,
     METRICS_LISTEN_PORT,
     JSON_NODEDB,
+    MSH_IS_UNMESSAGEABLE,
+    PRIVATE_KEY_PATH,
+    ENABLE_ENCRYPTION,
 }

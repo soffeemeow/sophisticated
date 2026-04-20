@@ -3,6 +3,7 @@ import * as meshtastic from '../meshtastic.js';
 import { PacketBuilder } from "./packet_builder.js";
 import * as env from '../env.js';
 import type { DeviceMetrics, EnvironmentMetrics, LocalStats } from "../telemetry.js";
+import { keypair } from "../crypto/keypair.js";
 
 export function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
     return new PacketBuilder()
@@ -33,7 +34,8 @@ export function createNodeInfoResponse(channelId: string, destination: number, r
                     shortName: env.MSH_SHORT_NAME,
                     hwModel: meshtastic.Mesh.HardwareModel.UNSET,
                     role: meshtastic.Config.Config_DeviceConfig_Role.CLIENT_MUTE,
-                    isUnmessagable: true,
+                    isUnmessagable: env.MSH_IS_UNMESSAGEABLE,
+                    publicKey: keypair.getPublicKey(),
                 })),
                 requestId,
             }),

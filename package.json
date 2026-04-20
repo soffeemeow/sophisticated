@@ -1,6 +1,6 @@
 {
   "name": "sophisticated",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "description": "",
   "main": "index.js",
   "type": "module",
@@ -15,6 +15,7 @@
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
+    "@noble/curves": "^2.2.0",
     "dotenv-cli": "^8.0.0",
     "mqtt": "^5.15.0",
     "node-fetch": "^3.3.2",

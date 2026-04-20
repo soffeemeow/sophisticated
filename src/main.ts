@@ -10,6 +10,7 @@ import { handleIncomingPacket } from "./handlers.js";
 import * as meshtastic from './meshtastic.js';
 import { getRegistry, initMeshtasticRxMetrics, initMetrics } from "./metrics/metrics.js";
 import { initNodeDB } from "./nodedb/node_db.js";
+import { initKeyPair } from "./crypto/keypair.js";
 
 if (env.IS_DEV_ENVIRONMENT) {
     console.log("[!!!!!!!!!] packet hop_limit and hop_start will be overriden to 0 on outgoing packets because environment is development.");
@@ -23,6 +24,7 @@ const rxMetrics = initMeshtasticRxMetrics(metricsRegistry);
 mqtt.initMqttTxMetrics(metricsRegistry);
 
 initNodeDB();
+initKeyPair(env.PRIVATE_KEY_PATH);
 
 class ReceivedPacketInfo {
     constructor(
