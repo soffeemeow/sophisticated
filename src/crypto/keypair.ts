@@ -80,11 +80,3 @@ export class Keypair {
         return Buffer.from(this.getPublicKey()).toString("base64");
     }
 }
-
-export const keypair = new Keypair();
-
-export function initKeyPair(keyFile: string) {
-    if (keypair.initFromFile(keyFile, true)) {
-        console.log(`[PKI] New keypair was generated with pubkey '${keypair.getPublicKeyString()}' and saved to file '${keyFile}'.`);
-    }
-}

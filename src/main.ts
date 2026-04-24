@@ -1,7 +1,7 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as env from './env.js';
 import * as mqtt from './mqtt.js';
-import { envelopeHasPacket, formatPacketLog, toStringUserId } from './utils.js';
+import { envelopeHasPacket, formatPacketLog, stringUidToNumber, toStringUserId } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
@@ -10,7 +10,7 @@ import { handleIncomingPacket } from "./handlers.js";
 import * as meshtastic from './meshtastic.js';
 import { getRegistry, initMeshtasticRxMetrics, initMetrics } from "./metrics/metrics.js";
 import { initNodeDB } from "./nodedb/node_db.js";
-import { initKeyPair } from "./crypto/keypair.js";
+import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 
 if (env.IS_DEV_ENVIRONMENT) {
     console.log("[!!!!!!!!!] packet hop_limit and hop_start will be overriden to 0 on outgoing packets because environment is development.");
@@ -185,3 +185,24 @@ await sendNodeInfo();
 await sendPosition();
 await sendEnvironmentMetrics();
 await sendDeviceMetrics();
+
+// #TODO pki encryption WIP
+// const pkt = new PacketBuilder()
+//     .setChannelId(DEFAULT_CHANNEL)
+//     .setDestination(stringUidToNumber(env.MSH_GATEWAY))
+//     .setPayload({
+//         case: "decoded",
+//         value: create(meshtastic.Mesh.DataSchema, {
+//             portnum: meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP,
+//             payload: Buffer.from("meowww", "utf-8"),
+//         }),
+//     })
+//     .build();
+
+// pkt.packet!.payloadVariant = {
+//     case: "encrypted",
+//     value: encryptPKIPacket(new Uint8Array(), pkt.packet!),
+// };
+// pkt.packet!.pkiEncrypted = true;
+
+// await mqtt.sendPacket(pkt);

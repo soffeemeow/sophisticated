@@ -3,7 +3,7 @@ import * as meshtastic from '../meshtastic.js';
 import { PacketBuilder } from "./packet_builder.js";
 import * as env from '../env.js';
 import type { DeviceMetrics, EnvironmentMetrics, LocalStats } from "../telemetry.js";
-import { keypair } from "../crypto/keypair.js";
+import { keypair } from "../crypto/pki.js";
 
 export function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
     return new PacketBuilder()
