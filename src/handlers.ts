@@ -261,8 +261,10 @@ function getPingStatusMessage(packet: IncomingPacket) {
         return `📡 (S: ${packet.rxSnr}, R: ${packet.rxRssi})`;
     }
 
-    if (hops === 6 && packet.hopStart === 7) {
-        return "🕸️ (Hops: SIX/SEVEEEEEN!!!)";
+    if (config.bot.modules.ping.six_seven_enabled && hops === 6 && packet.hopStart === 7) {
+        if (Math.random() <= config.bot.modules.ping.six_seven_proc) {
+            return "🕸️ (Hops: SIX/SEVEEEEEN!!!)";
+        }
     }
 
     return `🕸️ (Hops: ${hops}/${packet.hopStart})`;
