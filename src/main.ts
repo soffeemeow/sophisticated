@@ -1,7 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as env from './env.js';
 import * as mqtt from './mqtt.js';
-import { envelopeHasPacket, formatPacketLog, stringUidToNumber, toStringUserId } from './utils.js';
+import { envelopeHasPacket, formatPacketLog, getCmdlineOption, stringUidToNumber, toStringUserId } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
@@ -11,20 +10,53 @@ import * as meshtastic from './meshtastic.js';
 import { getRegistry, initMeshtasticRxMetrics, initMetrics } from "./metrics/metrics.js";
 import { initNodeDB } from "./nodedb/node_db.js";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
+import { checkConfigSanity, config, loadConfig } from "./config/config.js";
 
-if (env.IS_DEV_ENVIRONMENT) {
-    console.log("[!!!!!!!!!] packet hop_limit and hop_start will be overriden to 0 on outgoing packets because environment is development.");
+let configFile = getCmdlineOption("--config", "-c");
+
+if (configFile === "") {
+    console.error("config file option specified but no value is provided. check your command line options.");
+    process.exit(1);
 }
 
-console.log("Initializing Prometheus Metrics...");
-initMetrics();
+if (configFile === null) {
+    configFile = "./config.yaml";
+    console.log(`config file is not specified, using default location '${configFile}'`);
+}
 
-const metricsRegistry = getRegistry();
-const rxMetrics = initMeshtasticRxMetrics(metricsRegistry);
-mqtt.initMqttTxMetrics(metricsRegistry);
+if (!loadConfig(configFile)) {
+    console.error(
+        `could not find config file at location '${configFile}'.`, 
+        "file was created with default configuration.",
+        "please edit it to your needs and restart the program.",
+    );
+    process.exit(1);
+}
+
+const configProblems = checkConfigSanity(config);
+if (configProblems.length > 0) {
+    console.error(
+        [
+        `found configuration file problems:`,
+        ...configProblems.map(p => ` - ${p}`),
+        "please fix them and restart the program."
+        ].join("\n")
+    );
+    process.exit(1);
+}
 
 initNodeDB();
-initKeyPair(env.PRIVATE_KEY_PATH);
+initKeyPair(config.meshtastic.pki.private_key_path);
+await mqtt.initMQTT();
+
+let rxMetrics: ReturnType<typeof initMeshtasticRxMetrics> | undefined;
+if (config.metrics.enabled) {
+    console.log("Initializing Prometheus Metrics...");
+    initMetrics();
+    const metricsRegistry = getRegistry();
+    rxMetrics = initMeshtasticRxMetrics(metricsRegistry);
+    mqtt.initMqttTxMetrics(metricsRegistry);
+}
 
 class ReceivedPacketInfo {
     constructor(
@@ -77,11 +109,11 @@ client.on("message", async (topic, message) => {
 
     const envelope = fromBinary(meshtastic.Mqtt.ServiceEnvelopeSchema, message);
 
-    if (envelope.gatewayId === env.MSH_UID) {
+    if (envelope.gatewayId === config.meshtastic.node.id) {
         return;
     }
 
-    if (envelope.gatewayId !== env.MSH_GATEWAY) {
+    if (envelope.gatewayId !== config.mqtt.gateway) {
         console.log(formatPacketLog(topic, envelope), `received message from unknown gateway, throwing away.`);
         return;
     }
@@ -106,11 +138,13 @@ client.on("message", async (topic, message) => {
         relayNode: labels.relayNode,
     }
 
-    rxMetrics.mesh_packets_received_counter.inc(labels);
+    if (config.metrics.enabled && rxMetrics) {
+        rxMetrics.mesh_packets_received_counter.inc(labels);
 
-    rxMetrics.mesh_packets_received_hops_histogram.observe(histogramLabels, envelope.packet.hopStart - envelope.packet.hopLimit);
-    rxMetrics.mesh_packets_received_rssi_histogram.observe(histogramLabels, envelope.packet.rxRssi);
-    rxMetrics.mesh_packets_received_snr_histogram.observe(histogramLabels, envelope.packet.rxSnr);
+        rxMetrics.mesh_packets_received_hops_histogram.observe(histogramLabels, envelope.packet.hopStart - envelope.packet.hopLimit);
+        rxMetrics.mesh_packets_received_rssi_histogram.observe(histogramLabels, envelope.packet.rxRssi);
+        rxMetrics.mesh_packets_received_snr_histogram.observe(histogramLabels, envelope.packet.rxSnr);
+    }
 
     const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
     if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {

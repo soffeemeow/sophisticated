@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import * as meshtastic from '../meshtastic.js';
 import { stringUidToNumber } from "../utils.js";
-import * as env from '../env.js';
+import { config } from "../config/config.js";
 
 export class PacketBuilder {
     private channelId?: string;
@@ -51,10 +51,10 @@ export class PacketBuilder {
 
         return create(meshtastic.Mqtt.ServiceEnvelopeSchema, {
             channelId: this.channelId,
-            gatewayId: env.MSH_UID,
+            gatewayId: config.meshtastic.node.id,
             packet: create(meshtastic.Mesh.MeshPacketSchema, {
                 id: this.packetId,
-                from: stringUidToNumber(env.MSH_UID),
+                from: stringUidToNumber(config.meshtastic.node.id),
                 to: this.destination,
                 priority: this.priority,
                 viaMqtt: false,

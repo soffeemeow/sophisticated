@@ -1,6 +1,6 @@
+import { config } from '../config/config.js';
 import * as meshtastic from '../meshtastic.js';
 import { JSONNodeDB } from './json_node_db.js';
-import * as env from '../env.js';
 
 export interface NodeInfoStorage {
     updateNode: (id: string | number, data: meshtastic.Mesh.NodeInfo) => void;
@@ -15,7 +15,7 @@ export function initNodeDB() {
     if (nodedb !== undefined) {
         throw new Error("NodeDB is already initialized.");
     }
-    nodedb = new JSONNodeDB(env.JSON_NODEDB);
+    nodedb = new JSONNodeDB(config.meshtastic.node_db.json_db_file_path);
 }
 
 export { nodedb }

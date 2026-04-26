@@ -2,12 +2,12 @@ import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as meshtastic from './meshtastic.js';
 import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
-import * as env from './env.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse, createTextResponse } from "./packets/response.js";
 import { PacketBuilder } from "./packets/packet_builder.js";
 import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
 import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
+import { config } from "./config/config.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
@@ -20,7 +20,7 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
 
     console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] at ${new Date(telemetry.time * 1000).toISOString()}`, telemetry.variant.value);
     
-    if (envelope.packet.to === stringUidToNumber(env.MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
+    if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         switch (telemetry.variant.case) {
             case "environmentMetrics": {
                 const metrics = await getEnvironmentMetrics();
@@ -31,7 +31,7 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
             }
             case "localStats": {
                 // seems like local stats should not be sent over the mesh.... oh well.. 
-                if (envelope.packet.from !== stringUidToNumber(env.MSH_GATEWAY)) return;
+                if (envelope.packet.from !== stringUidToNumber(config.mqtt.gateway)) return;
 
                 const metrics = await getLocalStats();
                 if (!metrics) return;
@@ -60,7 +60,7 @@ async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceE
 
     console.log(formatPacketLog("TracerouteApp", envelope), routeDiscovery);
     
-    const nodeId = stringUidToNumber(env.MSH_UID);
+    const nodeId = stringUidToNumber(config.meshtastic.node.id);
 
     if (envelope.packet.to === nodeId && envelope.packet.payloadVariant.value.wantResponse) {
         routeDiscovery.snrTowards.push(0);
@@ -90,7 +90,7 @@ async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
 
     console.log(formatPacketLog("NodeInfoApp", envelope), `${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel}`);
     
-    if (envelope.packet.to === stringUidToNumber(env.MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
+    if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         await mqtt.sendPacket(createNodeInfoResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
     }
 }
@@ -107,7 +107,7 @@ async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
 
     console.log(formatPacketLog("PositionApp", envelope), `LAT: ${la}, LON: ${lo}, ALT: ${alt}, SRC: ${position.locationSource}`);
     
-    if (envelope.packet.to === stringUidToNumber(env.MSH_UID) && envelope.packet.payloadVariant.value.wantResponse) {
+    if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         await mqtt.sendPacket(createPositionResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
     }
 }
@@ -253,7 +253,7 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
 
 function getPingStatusMessage(packet: IncomingPacket) {
     const hops = packet.hopStart - packet.hopLimit;
-    if (packet.sender === env.MSH_GATEWAY) {
+    if (packet.sender === config.mqtt.gateway) {
         return "🔌 (GW)";
     }
     

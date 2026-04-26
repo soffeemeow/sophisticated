@@ -3,6 +3,32 @@ import * as meshtastic from './meshtastic.js';
 export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 export type RequiredBy<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
 export type ReadonlyBy<T, K extends keyof T> = Omit<T, K> & Readonly<Pick<T, K>>
+export type ArrayElement<A extends readonly unknown[]> = A extends readonly (infer E)[] ? E : never;
+export type AllNullable<T> = {
+    [P in keyof T]: AllNullable<T[P] | undefined>;
+}
+
+export type MeshtasticRoles = keyof typeof meshtastic.Config.Config_DeviceConfig_Role;
+export type MeshtasticDeprecatedRoles = "ROUTER_CLIENT" | "REPEATER";
+
+export function mshStringRoleToEnum(role: MeshtasticRoles) {
+    switch(role) {
+        case "CLIENT": return meshtastic.Config.Config_DeviceConfig_Role.CLIENT;
+        case "CLIENT_BASE": return meshtastic.Config.Config_DeviceConfig_Role.CLIENT_BASE;
+        case "CLIENT_HIDDEN": return meshtastic.Config.Config_DeviceConfig_Role.CLIENT_HIDDEN;
+        case "CLIENT_MUTE": return meshtastic.Config.Config_DeviceConfig_Role.CLIENT_MUTE;
+        case "LOST_AND_FOUND": return meshtastic.Config.Config_DeviceConfig_Role.LOST_AND_FOUND;
+        case "REPEATER": return meshtastic.Config.Config_DeviceConfig_Role.REPEATER;
+        case "ROUTER": return meshtastic.Config.Config_DeviceConfig_Role.ROUTER;
+        case "ROUTER_CLIENT": return meshtastic.Config.Config_DeviceConfig_Role.ROUTER_CLIENT;
+        case "ROUTER_LATE": return meshtastic.Config.Config_DeviceConfig_Role.ROUTER_LATE;
+        case "SENSOR": return meshtastic.Config.Config_DeviceConfig_Role.SENSOR;
+        case "TAK": return meshtastic.Config.Config_DeviceConfig_Role.TAK;
+        case "TAK_TRACKER": return meshtastic.Config.Config_DeviceConfig_Role.TAK_TRACKER;
+        case "TRACKER": return meshtastic.Config.Config_DeviceConfig_Role.TRACKER;
+        default: throw new Error(`Unknown meshtastic role '${role}'`);
+    }
+}
 
 export function toStringUserId(value: number) {
     return "!" + value.toString(16).padStart(8, "0");
@@ -67,4 +93,23 @@ export function getChannelHash(name: string, psk: Buffer) {
     let hash = xorHash(Buffer.from(name, "ascii"));
     hash ^= xorHash(psk);
     return hash;
+}
+
+
+/**
+ * @returns null if option is not found, empty string if found but value is not defined, value itself otherwise
+ */
+export function getCmdlineOption(search: string, alias?: string) {
+    let idx = process.argv.findIndex((v, i) => {
+        if (i < 2) return false;
+        return v === search || (alias !== undefined && v === alias);
+    });
+
+    if (idx === -1) return null;
+    if (idx + 1 >= process.argv.length) return ""; 
+
+    const value = process.argv[idx + 1];
+    if (!value) return "";
+    
+    return value;
 }

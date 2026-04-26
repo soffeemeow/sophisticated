@@ -1,14 +1,36 @@
 import mqtt from 'mqtt';
 import * as meshtastic from './meshtastic.js';
 import { toBinary } from "@bufbuild/protobuf";
-import * as env from './env.js';
 import { counters } from './telemetry.js';
 import { Counter, Registry } from 'prom-client';
 import { getChannelHash, toStringUserId } from './utils.js';
 import { defaultPSK, encryptPacket } from './crypto/crypto.js';
+import { config } from './config/config.js';
 
-const client = await mqtt.connectAsync("mqtt://" + process.env.MQTT_ADDRESS);
-await client.subscribeAsync(env.MQTT_TOPIC + "/#");
+let client: mqtt.MqttClient;
+
+export async function initMQTT() {
+    if (client) {
+        throw new Error("MQTT client is already initialized.");
+    }
+
+    const clientOpts: mqtt.IClientOptions = {
+        host: config.mqtt.connection.host,
+        port: config.mqtt.connection.port,
+        clientId: `sophisticated-${Math.floor(Math.random() * 0xffff)}`,
+    };
+
+    if (config.mqtt.connection.user) {
+        clientOpts.username = config.mqtt.connection.user;
+    }
+
+    if (config.mqtt.connection.password) {
+        clientOpts.password = config.mqtt.connection.password;
+    }
+
+    client = await mqtt.connectAsync(clientOpts);
+    await client.subscribeAsync(config.mqtt.root_topic + "/#");
+}
 
 const mesh_packets_sent_counter = new Counter({
     name: "meshtastic_mesh_packets_sent_count",
@@ -26,11 +48,6 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
     }
 
     counters.numPacketsTx++;
-    
-    if (env.IS_DEV_ENVIRONMENT) {
-        envelope.packet.hopLimit = 0;
-        envelope.packet.hopStart = 0;
-    }
 
     mesh_packets_sent_counter.inc({
         gateway: envelope.gatewayId,
@@ -40,7 +57,7 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         port: envelope.packet.payloadVariant.case === "decoded" ? envelope.packet.payloadVariant.value.portnum : 0,
     });
 
-    if (env.ENABLE_ENCRYPTION && envelope.packet.payloadVariant.case !== "encrypted") {
+    if (config.mqtt.encryption && envelope.packet.payloadVariant.case !== "encrypted") {
         envelope.packet.channel = getChannelHash(envelope.channelId, defaultPSK);
         envelope.packet.payloadVariant = {
             case: "encrypted",
@@ -48,7 +65,7 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         };
     }
 
-    await client.publishAsync(env.MQTT_TOPIC + "/2/e/" + envelope.channelId + "/" + envelope.gatewayId, Buffer.from(toBinary(
+    await client.publishAsync(config.mqtt.root_topic + "/2/e/" + envelope.channelId + "/" + envelope.gatewayId, Buffer.from(toBinary(
         meshtastic.Mqtt.ServiceEnvelopeSchema, 
         envelope,
     )));

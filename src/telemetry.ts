@@ -1,4 +1,4 @@
-import * as env from './env.js';
+import { config } from './config/config.js';
 import fetch from 'node-fetch';
 
 export interface EnvironmentMetrics {
@@ -31,11 +31,11 @@ const counters = {
 }
 
 async function queryPrometheus(query: string, time: Date = new Date()) {
-    if (!env.PROMETHEUS_URL) {
-        throw new Error("PROMETHEUS_URL is not defined");
+    if (!config.prometheus) {
+        throw new Error("Prometheus is not configured");
     }
     
-    const body = await (await fetch(env.PROMETHEUS_URL + "/api/v1/query", {
+    const body = await (await fetch(config.prometheus.url + "/api/v1/query", {
         method: "POST",
         body: new URLSearchParams({
             query,
@@ -61,10 +61,10 @@ async function queryPrometheus(query: string, time: Date = new Date()) {
 }
 
 export async function getEnvironmentMetrics() {
-    if (!env.PROMETHEUS_URL) return;
+    if (!config.prometheus) return;
 
-    const temperatureResult = await queryPrometheus(`avg_over_time(world_temperature{job="micrometeo", location="outside"}[1m])`);
-    const pressureResult = await queryPrometheus(`avg_over_time(world_atmospheric_pressure{job="micrometeo", location="home"}[1m])`);
+    const temperatureResult = await queryPrometheus(config.prometheus.queries.temperature);
+    const pressureResult = await queryPrometheus(config.prometheus.queries.barometric_pressure);
         
     if (temperatureResult.resultType !== "vector" || pressureResult.resultType !== "vector") return;
     if (temperatureResult.result.length === 0 || pressureResult.result.length === 0) return;

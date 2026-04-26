@@ -7,3 +7,5 @@ node_modules
 nodedb.json
 sophisticated-nodedb.json
 private.key
+config.yml
+config.yaml

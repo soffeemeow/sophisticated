@@ -1,9 +1,10 @@
 import { create, toBinary } from "@bufbuild/protobuf";
 import * as meshtastic from '../meshtastic.js';
 import { PacketBuilder } from "./packet_builder.js";
-import * as env from '../env.js';
 import type { DeviceMetrics, EnvironmentMetrics, LocalStats } from "../telemetry.js";
 import { keypair } from "../crypto/pki.js";
+import { config } from "../config/config.js";
+import { mshStringRoleToEnum, type MeshtasticRoles } from "../utils.js";
 
 export function createTextResponse(channelId: string, destination: number, text: string, replyId: number = 0) {
     return new PacketBuilder()
@@ -29,12 +30,12 @@ export function createNodeInfoResponse(channelId: string, destination: number, r
             value: create(meshtastic.Mesh.DataSchema, {
                 portnum: meshtastic.Portnums.PortNum.NODEINFO_APP,
                 payload: toBinary(meshtastic.Mesh.UserSchema, create(meshtastic.Mesh.UserSchema, {
-                    id: env.MSH_UID,
-                    longName: env.MSH_LONG_NAME,
-                    shortName: env.MSH_SHORT_NAME,
+                    id: config.meshtastic.node.id,
+                    longName: config.meshtastic.node.name.long,
+                    shortName: config.meshtastic.node.name.short,
                     hwModel: meshtastic.Mesh.HardwareModel.UNSET,
-                    role: meshtastic.Config.Config_DeviceConfig_Role.CLIENT_MUTE,
-                    isUnmessagable: env.MSH_IS_UNMESSAGEABLE,
+                    role: mshStringRoleToEnum(config.meshtastic.node.role as MeshtasticRoles),
+                    isUnmessagable: config.meshtastic.node.is_unmessageable,
                     publicKey: keypair.getPublicKey(),
                 })),
                 requestId,
@@ -46,16 +47,16 @@ export function createNodeInfoResponse(channelId: string, destination: number, r
 export function createPositionResponse(channelId: string, destination: number, requestId: number = 0) {
     const message = create(meshtastic.Mesh.PositionSchema);
 
-    if (env.MSH_POS_LAT !== undefined) {
-        message.latitudeI = Math.floor(parseFloat(env.MSH_POS_LAT!) / 1e-7);
+    if (config.meshtastic.node.location?.latitude !== undefined) {
+        message.latitudeI = Math.floor(config.meshtastic.node.location.latitude / 1e-7);
     }
 
-    if (env.MSH_POS_LON !== undefined) {
-        message.longitudeI = Math.floor(parseFloat(env.MSH_POS_LON!) / 1e-7);
+    if (config.meshtastic.node.location?.longitude !== undefined) {
+        message.longitudeI = Math.floor(config.meshtastic.node.location.longitude / 1e-7);
     }
 
-    if (env.MSH_POS_ALT !== undefined) {
-        message.altitude = parseInt(env.MSH_POS_ALT!);
+    if (config.meshtastic.node.location?.altitude !== undefined) {
+        message.altitude = config.meshtastic.node.location.altitude;
     }
 
     return new PacketBuilder()

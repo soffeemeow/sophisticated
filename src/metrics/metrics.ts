@@ -1,6 +1,6 @@
 import { collectDefaultMetrics, Counter, Histogram, linearBuckets, Registry } from "prom-client";
 import { MetricsServer } from "./server.js";
-import * as env from '../env.js';
+import { config } from "../config/config.js";
 
 let server: MetricsServer | undefined;
 
@@ -13,10 +13,7 @@ export function initMetrics() {
     collectDefaultMetrics({ register: registry });
 
     server = new MetricsServer(registry);
-    server.listen(
-        env.METRICS_LISTEN_HOST ?? "127.0.0.1",
-        env.METRICS_LISTEN_PORT ? parseInt(env.METRICS_LISTEN_PORT!) : 9067
-    );
+    server.listen(config.metrics.listen_address, config.metrics.listen_port);
 }
 
 export function getRegistry() {

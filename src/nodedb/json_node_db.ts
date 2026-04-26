@@ -3,74 +3,11 @@ import * as meshtastic from '../meshtastic.js';
 import { stringUidToNumber, toStringUserId } from '../utils.js';
 import fs from "node:fs";
 import type { NodeInfoStorage } from './node_db.js';
+import { validate } from '../validator.js';
+import { JDBNodeSchema, JDBUserSchema } from './schemas.js';
 
-type JDBNode = Omit<meshtastic.Mesh.NodeInfo, "$typeName" | "$unknown" | "num" | "user" | "position" | "deviceMetrics">
-type JDBUser = Omit<meshtastic.Mesh.User, "$typeName" | "$unknown" | "id" | "macaddr" | "role" | "hwModel" | "publicKey"> & { role: number, hwModel: number, publicKey: string }
-
-type TypeOf<T> = 
-    T extends string    ? "string"    : 
-    T extends number    ? "number"    :
-    T extends bigint    ? "bigint"    :
-    T extends boolean   ? "boolean"   :
-    T extends symbol    ? "symbol"    :
-    T extends undefined ? "undefined" :
-    T extends Function  ? "function"  :
-    T extends object    ? "object"    : unknown;
-
-type ObjectSchema<T> = {
-    optional: {
-        [P in keyof Required<T>]: T extends Record<P, T[P]> ? false : true
-    }
-    types: {
-        [P in keyof Required<T>]: TypeOf<T[P]>;
-    }
-};
-
-const JDBNodeSchema: ObjectSchema<JDBNode> = {
-    optional: {
-        snr: false,
-        lastHeard: false,
-        channel: false,
-        viaMqtt: false,
-        hopsAway: true,
-        isFavorite: false,
-        isIgnored: false,
-        isKeyManuallyVerified: false,
-        isMuted: false
-    },
-    types: {
-        snr: 'number',
-        lastHeard: 'number',
-        channel: 'number',
-        viaMqtt: 'boolean',
-        hopsAway: 'number',
-        isFavorite: 'boolean',
-        isIgnored: 'boolean',
-        isKeyManuallyVerified: 'boolean',
-        isMuted: 'boolean'
-    }
-}
-
-const JDBUserSchema: ObjectSchema<JDBUser> = {
-    optional: {
-        longName: false,
-        shortName: false,
-        isLicensed: false,
-        isUnmessagable: true,
-        role: false,
-        hwModel: false,
-        publicKey: false
-    },
-    types: {
-        longName: 'string',
-        shortName: 'string',
-        isLicensed: 'boolean',
-        isUnmessagable: 'boolean',
-        role: 'number',
-        hwModel: 'number',
-        publicKey: 'string'
-    }
-}
+export type JDBNode = Omit<meshtastic.Mesh.NodeInfo, "$typeName" | "$unknown" | "num" | "user" | "position" | "deviceMetrics">
+export type JDBUser = Omit<meshtastic.Mesh.User, "$typeName" | "$unknown" | "id" | "macaddr" | "role" | "hwModel" | "publicKey"> & { role: number, hwModel: number, publicKey: string }
 
 export class JSONNodeDB implements NodeInfoStorage {
     private nodes: Map<string, JDBNode> = new Map();
@@ -99,30 +36,6 @@ export class JSONNodeDB implements NodeInfoStorage {
         });
     }
 
-    private validate<T>(data: any, schema: ObjectSchema<T>): T {
-        if (typeof data !== "object") {
-            throw new Error("is not an object");
-        }
-        
-        for (const k in schema.types) {
-            if (!schema.optional[k] && !(k in data)) {
-                throw new Error(`has no '${k}' field`);
-            }
-            
-            const refFieldType = schema.types[k];
-            const actualFieldType = typeof data[k];
-
-            if (actualFieldType !== refFieldType) {
-                if (actualFieldType === "undefined" && schema.optional[k]) {
-                    continue;
-                }
-                throw new Error(`field '${k}' is expected to be ${refFieldType}, but found ${actualFieldType}`);
-            }
-        }
-
-        return data;
-    }
-
     private loadFromFile() {
         if (!fs.existsSync(this.filePath)) {
             this.save();
@@ -144,7 +57,7 @@ export class JSONNodeDB implements NodeInfoStorage {
 
         for (const n in data.nodes) {
             try {
-                const node = this.validate(data.nodes[n], JDBNodeSchema);
+                const node = validate(data.nodes[n], JDBNodeSchema);
                 this.nodes.set(n, node);
             } catch (e) {
                 throw new Error(`Failed to load JSON NodeDB: .nodes['${n}'] is invalid: ${e}`);
@@ -153,7 +66,7 @@ export class JSONNodeDB implements NodeInfoStorage {
 
         for (const u in data.users) {
             try {
-                const user = this.validate(data.users[u], JDBUserSchema);
+                const user = validate(data.users[u], JDBUserSchema);
                 this.nodeUsers.set(u, user);
             } catch (e) {
                 throw new Error(`Failed to load JSON NodeDB: .users['${u}'] is invalid: ${e}`);
