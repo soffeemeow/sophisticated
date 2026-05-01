@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as mqtt from './mqtt.js';
-import { envelopeHasPacket, formatPacketLog, getCmdlineOption, stringUidToNumber, toStringUserId } from './utils.js';
+import { durationOrSeconds, envelopeHasPacket, formatPacketLog, getCmdlineOption, stringUidToNumber, toStringUserId } from './utils.js';
 import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
 import { PacketBuilder } from './packets/packet_builder.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
@@ -205,15 +205,29 @@ async function sendTraceroute(dest: number) {
     );
 }
 
-setInterval(async () => {
-    await sendNodeInfo();
-    await sendPosition();
-    await sendDeviceMetrics();
-}, 3600 * 1000);
+const intervals = config.meshtastic.mesh.broadcast_intervals;
+const intervals_ms: Record<keyof typeof config.meshtastic.mesh.broadcast_intervals, number> = {
+    position: durationOrSeconds(intervals.position, 1 * 60 * 60),
+    node_info: durationOrSeconds(intervals.node_info, 1 * 60 * 60),
+    device_metrics: durationOrSeconds(intervals.device_metrics, 1 * 60 * 60),
+    environment_metrics: durationOrSeconds(intervals.environment_metrics, 1 * 60 * 60),
+}
 
 setInterval(async () => {
     await sendEnvironmentMetrics();
-}, 300 * 1000);
+}, intervals_ms.environment_metrics);
+
+setInterval(async () => {
+    await sendNodeInfo();
+}, intervals_ms.node_info);
+
+setInterval(async () => {
+    await sendDeviceMetrics();
+}, intervals_ms.device_metrics);
+
+setInterval(async () => {
+    await sendPosition();
+}, intervals_ms.position);
 
 await sendNodeInfo();
 await sendPosition();

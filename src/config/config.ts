@@ -271,6 +271,8 @@ export function checkConfigSanity(config: Config) {
         problems.push(`value of '<root>.meshtastic.node.role' must be one of ${allowed}`);
     }
 
+    // #TODO: validate config.meshtastic.mesh.broadcast_intervals
+    
     return problems;
 }
 

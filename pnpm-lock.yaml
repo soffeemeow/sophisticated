@@ -26,6 +26,9 @@ importers:
       node-fetch:
         specifier: ^3.3.2
         version: 3.3.2
+      parse-duration:
+        specifier: ^2.1.6
+        version: 2.1.6
       prom-client:
         specifier: ^15.1.3
         version: 15.1.3
@@ -450,6 +453,9 @@ packages:
 
   number-allocator@1.0.14:
     resolution: {integrity: sha512-OrL44UTVAvkKdOdRQZIJpLkAdjXGTRda052sN4sO77bKEzYYqWKMBjQvrJFzqygI99gL6Z4u2xctPW1tB8ErvA==}
+
+  parse-duration@2.1.6:
+    resolution: {integrity: sha512-1/A2Exg3NcJGcYdgV/dn4frR7vO2hOW/ohQ4KIgbT4W3raVcpYSszPWiL6I6cKufi4jQM5NbGRXLBj8AoLM4iQ==}
 
   path-key@3.1.1:
     resolution: {integrity: sha512-ojmeN0qd+y0jszEtoY48r0Peq5dwMEkIlCOu6Q5f41lfkswXuKtYrhgoTpLnyIcHm24Uhqx+5Tqm2InSwLhE6Q==}
@@ -918,6 +924,8 @@ snapshots:
       js-sdsl: 4.3.0
     transitivePeerDependencies:
       - supports-color
+
+  parse-duration@2.1.6: {}
 
   path-key@3.1.1: {}
 

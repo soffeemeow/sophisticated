@@ -1,4 +1,5 @@
 import * as meshtastic from './meshtastic.js';
+import parseDuration from 'parse-duration';
 
 export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 export type RequiredBy<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
@@ -10,6 +11,26 @@ export type AllNullable<T> = {
 
 export type MeshtasticRoles = keyof typeof meshtastic.Config.Config_DeviceConfig_Role;
 export type MeshtasticDeprecatedRoles = "ROUTER_CLIENT" | "REPEATER";
+
+
+export function durationOrSeconds(value: string | number): number | null;
+export function durationOrSeconds(value: string | number, default_seconds: number): number;
+
+/**
+ * @param value duration in string format or number of seconds
+ * @param default_seconds default duration to return if value is <= 0 or could not parse string duration 
+ * @returns duration in milliseconds
+ */
+export function durationOrSeconds(value: string | number, default_seconds?: number) {
+    const result = typeof value === "number" ? value * 1000 : parseDuration(value);
+
+    if (default_seconds !== undefined && (result === null || result <= 0)) {
+        return default_seconds * 1000;
+    }
+
+    return result;
+}
+
 
 export function mshStringRoleToEnum(role: MeshtasticRoles) {
     switch(role) {
