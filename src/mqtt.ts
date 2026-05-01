@@ -3,8 +3,8 @@ import * as meshtastic from './meshtastic.js';
 import { toBinary } from "@bufbuild/protobuf";
 import { counters } from './telemetry.js';
 import { Counter, Registry } from 'prom-client';
-import { getChannelHash, toStringUserId } from './utils.js';
-import { defaultPSK, encryptPacket } from './crypto/crypto.js';
+import { formatPacketLog, getChannelHash, toStringUserId } from './utils.js';
+import { encryptPacket, pskFromString } from './crypto/crypto.js';
 import { config } from './config/config.js';
 
 let client: mqtt.MqttClient;
@@ -47,6 +47,28 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         throw new Error("Packet is empty in ServiceEnvelope.");
     }
 
+    if (config.mqtt.encryption && envelope.packet.payloadVariant.case !== "encrypted") {
+        const channel = config.channels.find(c => c.name === envelope.channelId);
+
+        if (!channel) {
+            console.warn(formatPacketLog("MQTT_SEND_ENCRYPTED", envelope), `channel '${envelope.channelId}' not found in config`);
+            return;
+        }
+
+        const psk = pskFromString(channel.psk);
+
+        envelope.packet.channel = getChannelHash(envelope.channelId, psk);
+        envelope.packet.payloadVariant = {
+            case: "encrypted",
+            value: encryptPacket(psk, envelope.packet),
+        };
+    }
+
+    await client.publishAsync(config.mqtt.root_topic + "/2/e/" + envelope.channelId + "/" + envelope.gatewayId, Buffer.from(toBinary(
+        meshtastic.Mqtt.ServiceEnvelopeSchema, 
+        envelope,
+    )));
+
     counters.numPacketsTx++;
 
     mesh_packets_sent_counter.inc({
@@ -56,19 +78,6 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         to: toStringUserId(envelope.packet.to),
         port: envelope.packet.payloadVariant.case === "decoded" ? envelope.packet.payloadVariant.value.portnum : 0,
     });
-
-    if (config.mqtt.encryption && envelope.packet.payloadVariant.case !== "encrypted") {
-        envelope.packet.channel = getChannelHash(envelope.channelId, defaultPSK);
-        envelope.packet.payloadVariant = {
-            case: "encrypted",
-            value: encryptPacket(defaultPSK, envelope.packet),
-        };
-    }
-
-    await client.publishAsync(config.mqtt.root_topic + "/2/e/" + envelope.channelId + "/" + envelope.gatewayId, Buffer.from(toBinary(
-        meshtastic.Mqtt.ServiceEnvelopeSchema, 
-        envelope,
-    )));
 }
 
 export {

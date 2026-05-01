@@ -141,6 +141,8 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
 
     console.log(formatPacketLog("TextMessageApp", envelope), msg);
 
+    if (!config.bot.enabled) return;
+
     for (const h of TextCommandHandlers) {
         const ctx = {
                 packet: envelopeToIncomingPacket(envelope),
@@ -274,9 +276,11 @@ TextCommandHandlers.push({
     name: "ping",
     test: (ctx) => {
         if (ctx.isEncrypted) return false;
-        if (ctx.packet.channelId !== "Services") return false;
+        if (!config.bot.modules.ping.enabled) return false;
+        if (!config.bot.modules.ping.channels.includes(ctx.packet.channelId)) return false;
 
         const msg = ctx.message.toLowerCase();
+        // #TODO: add config option for trigger regexp
         return msg === "пинг" || msg === "ping";
     },
     handler: async (ctx) => {
@@ -289,9 +293,11 @@ TextCommandHandlers.push({
     name: "weather",
     test: (ctx) => {
         if (ctx.isEncrypted) return false;
-        if (!["Services", "LongFast"].includes(ctx.packet.channelId)) return false;
+        if (!config.bot.modules.weather.enabled) return false;
+        if (!config.bot.modules.weather.channels.includes(ctx.packet.channelId)) return false;
 
         const msg = ctx.message.toLowerCase();
+        // #TODO: add config option for trigger regexp
         return msg === "weather" || msg === "погода";
     },
     handler: async (ctx) => {
@@ -300,6 +306,7 @@ TextCommandHandlers.push({
             const metrics = await getEnvironmentMetrics();
             if (!metrics || !metrics.temperature || !metrics.barometricPressure) return;
 
+            // #TODO: add config option for template string
             response = `На улице: 🌡️ ${metrics.temperature.toFixed(2)} °C, ☁️ ${(metrics.barometricPressure / 1.333224).toFixed(2)} mmHg`
         } catch (e) {
             console.error("prometheus query failed:", e);
@@ -322,7 +329,7 @@ function wrapRegExp(regexp: RegExp) {
         `(?:${regexp.source})` +
         "(?:$|[^а-яА-Яa-zA-Z0-9])", regexp.flags);
 }
-
+// #TODO: add config options for whatever this is
 const animalNoises: AnimalNoise[] = [
     {
         animal: "cat",
@@ -373,7 +380,8 @@ TextCommandHandlers.push({
     name: "animals",
     test: (ctx) => {
         if (ctx.isEncrypted) return false;
-        if (!["LongFast", "test"].includes(ctx.packet.channelId)) return false;
+        if (!config.bot.modules.animals.enabled) return false;
+        if (!config.bot.modules.animals.channels.includes(ctx.packet.channelId)) return false;
 
         return findAnimalNoise(ctx.message) !== undefined;
     },

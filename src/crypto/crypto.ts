@@ -4,6 +4,20 @@ import { Mesh } from "../meshtastic.js";
 
 export const defaultPSK = Buffer.from([0xd4, 0xf1, 0xbb, 0x3a, 0x20, 0x29, 0x07, 0x59, 0xf0, 0xbc, 0xff, 0xab, 0xcf, 0x4e, 0x69, 0x01]);
 
+export function pskFromString(psk: string) {
+    const buf = Buffer.from(psk, "base64");
+    
+    if (buf.length === 1) {
+        return shortPskUnwrap(buf[0]!);
+    }
+
+    if (buf.length !== 16 && buf.length !== 32) {
+        throw new Error(`Invalid psk length: ${buf.length}`);
+    }
+
+    return buf;
+}
+
 /**
  * @param short one byte "short" psk
  * @returns full 32 byte psk (default psk and last byte bumped by short psk)
@@ -58,6 +72,10 @@ export function decryptPacket(key: Uint8Array, packet: Mesh.MeshPacket) {
         throw new Error("Packet is not encrypted");
     }
 
+    if (key.length !== 16 && key.length !== 32) {
+        throw new Error(`Invalid key length: ${key.length}`);
+    }
+
     const nonce = createNonce(packet.from, packet.id);
     const decipher = createDecipheriv(key.length === 16 ? 'aes-128-ctr' : 'aes-256-ctr', key, nonce);
 
@@ -76,6 +94,10 @@ export function encryptPacket(key: Uint8Array, packet: Mesh.MeshPacket) {
 
     if (packet.payloadVariant.value === undefined) {
         throw new Error("Packet has no payload");
+    }
+    
+    if (key.length !== 16 && key.length !== 32) {
+        throw new Error(`Invalid key length: ${key.length}`);
     }
 
     const nonce = createNonce(packet.from, packet.id);
