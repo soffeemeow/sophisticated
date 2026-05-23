@@ -1,28 +1,6 @@
 import { config } from './config/config.js';
 import fetch from 'node-fetch';
 
-export interface EnvironmentMetrics {
-    temperature?: number;
-    barometricPressure?: number;
-}
-
-export interface LocalStats {
-    uptimeSeconds?: number;
-    heapTotalBytes?: number;
-    heapFreeBytes?: number;
-    numPacketsTx?: number;
-    numPacketsRx?: number;
-    numRxDupe?: number;
-}
-
-export interface DeviceMetrics {
-    batteryLevel?: number;
-    voltage?: number;
-    channelUtilization?: number;
-    airUtilTx?: number;
-    uptimeSeconds?: number;
-}
-
 // #FIXME lol this will definitely gonna be affected by race conditions but oh well ;p
 const counters = {
     numPacketsTx: 0,
@@ -72,7 +50,7 @@ export async function getEnvironmentMetrics() {
     return {
         temperature: parseFloat(temperatureResult.result[0].value[1]),
         barometricPressure: parseFloat(pressureResult.result[0].value[1]),
-    } as EnvironmentMetrics;
+    }
 }
 
 export function getLocalStats() {
@@ -82,14 +60,14 @@ export function getLocalStats() {
         heapTotalBytes: mem.heapTotal,
         heapFreeBytes: mem.heapTotal - mem.heapUsed,
         ...counters,
-    } as LocalStats;
+    }
 }
 
 export function getDeviceMetrics() {
     return {
         batteryLevel: 101,
         uptimeSeconds: Math.floor(process.uptime()),
-    } as DeviceMetrics;
+    };
 }
 
 export {

@@ -1,6 +1,6 @@
 import { collectDefaultMetrics, Counter, Histogram, linearBuckets, Registry } from "prom-client";
 import { MetricsServer } from "./server.js";
-import * as meshtastic from '../meshtastic.js';
+import * as meshtastic from '../meshtastic/meshtastic.js';
 import { toStringUserId } from "../utils.js";
 import { toBinary } from "@bufbuild/protobuf";
 

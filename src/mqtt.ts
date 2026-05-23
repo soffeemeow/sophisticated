@@ -1,5 +1,5 @@
 import mqtt from 'mqtt';
-import * as meshtastic from './meshtastic.js';
+import * as meshtastic from './meshtastic/meshtastic.js';
 import { toBinary } from "@bufbuild/protobuf";
 import { counters } from './telemetry.js';
 import { Counter, Registry } from 'prom-client';

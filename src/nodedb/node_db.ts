@@ -1,5 +1,5 @@
 import { config } from '../config/config.js';
-import * as meshtastic from '../meshtastic.js';
+import * as meshtastic from '../meshtastic/meshtastic.js';
 import { JSONNodeDB } from './json_node_db.js';
 
 export interface NodeInfoStorage {

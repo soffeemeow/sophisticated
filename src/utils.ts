@@ -1,4 +1,4 @@
-import * as meshtastic from './meshtastic.js';
+import * as meshtastic from './meshtastic/meshtastic.js';
 import parseDuration from 'parse-duration';
 
 export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>

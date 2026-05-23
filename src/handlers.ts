@@ -1,18 +1,19 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as meshtastic from './meshtastic.js';
+import * as meshtastic from './meshtastic/meshtastic.js';
 import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
-import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse, createTelemetryLocalStatsResponse, createTextResponse } from "./packets/response.js";
-import { PacketBuilder } from "./packets/packet_builder.js";
 import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
 import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
 import { config } from "./config/config.js";
+import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.js";
+import { TelemetryBuilder } from "./meshtastic/builders.js";
+import { defaultNodeInfoBinary, defaultPositionBinary } from "./packets/response.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
 
-async function handleTelemetryApp(envelope: any, receivedTopic: string) {
+async function handleTelemetryApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
@@ -21,34 +22,63 @@ async function handleTelemetryApp(envelope: any, receivedTopic: string) {
     console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] at ${new Date(telemetry.time * 1000).toISOString()}`, telemetry.variant.value);
     
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
+        const responseBuilder = new TelemetryBuilder()
+            .setTime(Math.floor(new Date().getTime() / 1000));
+        
         switch (telemetry.variant.case) {
             case "environmentMetrics": {
                 const metrics = await getEnvironmentMetrics();
                 if (!metrics) return;
 
-                await mqtt.sendPacket(await createTelemetryEnvironmentMetricsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
-                return;
-            }
-            case "localStats": {
-                // seems like local stats should not be sent over the mesh.... oh well.. 
-                if (envelope.packet.from !== stringUidToNumber(config.mqtt.gateway)) return;
+                responseBuilder.environmentMetrics(m => m
+                    .setTemperature(metrics.temperature)
+                    .setBarometricPressure(metrics.barometricPressure)
+                );
 
-                const metrics = await getLocalStats();
-                if (!metrics) return;
-
-                await mqtt.sendPacket(await createTelemetryLocalStatsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
+                break;
             }
+
+            // case "localStats": {
+            //     // seems like local stats should not be sent over the mesh.... oh well.. 
+            //     if (envelope.packet.from !== stringUidToNumber(config.mqtt.gateway)) return;
+
+            //     const metrics = await getLocalStats();
+            //     if (!metrics) return;
+
+            //     await mqtt.sendPacket(await createTelemetryLocalStatsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
+            // }
+            
             case "deviceMetrics": {
                 const metrics = await getDeviceMetrics();
                 if (!metrics) return;
 
-                await mqtt.sendPacket(await createTelemetryDeviceMetricsResponse(envelope.channelId, envelope.packet.from, metrics, envelope.packet.id));
+                responseBuilder.deviceMetrics(m => m
+                    .setBatteryLevel(metrics.batteryLevel)
+                    .setUptimeSeconds(metrics.uptimeSeconds)
+                );
+
+                break;
             }
+
             default: {
                 console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] unsupported telemetry request`);
                 return;
             }
         }
+
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .setChannelId(envelope.channelId)
+            .packetPayload(p => p
+                .defaults()
+                .setDestination(envelope.packet.from)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
+                    .setRequestId(envelope.packet.id)
+                    .setPayload(responseBuilder.buildBinary())
+                )
+            ).build()
+        );
     }
 }
 
@@ -65,19 +95,18 @@ async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceE
     if (envelope.packet.to === nodeId && envelope.packet.payloadVariant.value.wantResponse) {
         routeDiscovery.snrTowards.push(0);
 
-        await mqtt.sendPacket(
-            new PacketBuilder()
-                .setChannelId(envelope.channelId)
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .setChannelId(envelope.channelId)
+            .packetPayload(p => p
+                .defaults()
                 .setDestination(envelope.packet.from)
-                .setPayload({
-                    case: "decoded",
-                    value: create(meshtastic.Mesh.DataSchema, {
-                        portnum: meshtastic.Portnums.PortNum.TRACEROUTE_APP,
-                        payload: toBinary(meshtastic.Mesh.RouteDiscoverySchema, routeDiscovery),
-                        requestId: envelope.packet.id,
-                    }),
-                })
-                .build()
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TRACEROUTE_APP)
+                    .setRequestId(envelope.packet.id)
+                    .setPayload(toBinary(meshtastic.Mesh.RouteDiscoverySchema, routeDiscovery))
+                )
+            ).build()
         );
     }
 }
@@ -91,7 +120,18 @@ async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
     console.log(formatPacketLog("NodeInfoApp", envelope), `${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel}`);
     
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
-        await mqtt.sendPacket(createNodeInfoResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(envelope.packet.from)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.NODEINFO_APP)
+                    .setRequestId(envelope.packet.id)
+                    .setPayload(defaultNodeInfoBinary())
+                )
+            ).build()
+        );
     }
 }
 
@@ -108,7 +148,18 @@ async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
     console.log(formatPacketLog("PositionApp", envelope), `LAT: ${la}, LON: ${lo}, ALT: ${alt}, SRC: ${position.locationSource}`);
     
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
-        await mqtt.sendPacket(createPositionResponse(envelope.channelId, envelope.packet.from, envelope.packet.id));
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(envelope.packet.from)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.POSITION_APP)
+                    .setRequestId(envelope.packet.id)
+                    .setPayload(defaultPositionBinary())
+                )
+            ).build()
+        );
     }
 }
 
@@ -285,7 +336,20 @@ TextCommandHandlers.push({
     },
     handler: async (ctx) => {
         const response = `Pong to ${ctx.packet.sender} ${getPingStatusMessage(ctx.packet)}`;
-        await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
+
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .setChannelId(ctx.packet.channelId)
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
+                    .setReplyId(ctx.packet.id)
+                    .setPayload(Buffer.from(response, "utf-8"))
+                )
+            ).build()
+        );
     }
 });
 
@@ -313,7 +377,19 @@ TextCommandHandlers.push({
             return;
         }
 
-        await mqtt.sendPacket(createTextResponse(ctx.packet.channelId, 0xffffffff, response, ctx.packet.id));
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .setChannelId(ctx.packet.channelId)
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
+                    .setReplyId(ctx.packet.id)
+                    .setPayload(Buffer.from(response, "utf-8"))
+                )
+            ).build()
+        );
     }
 });
 
@@ -395,20 +471,19 @@ TextCommandHandlers.push({
             throw new Error("wtf");
         }
 
-        const response = new PacketBuilder()
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
             .setChannelId(ctx.packet.channelId)
-            .setDestination(0xffffffff)
-            .setPayload({
-                case: "decoded",
-                value: create(meshtastic.Mesh.DataSchema, {
-                    portnum: meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP,
-                    payload: Buffer.from(emoji),
-                    replyId: ctx.packet.id,
-                    emoji: Number(true),
-                }),
-        })
-        .build();
-
-        await mqtt.sendPacket(response);
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
+                    .setReplyId(ctx.packet.id)
+                    .setPayload(Buffer.from(emoji, "utf-8"))
+                    .setEmoji(Number(true))
+                )
+            ).build()
+        );
     }
 });

@@ -1,6 +1,6 @@
 import { create, fromBinary } from "@bufbuild/protobuf";
 import { readFile, writeFile } from "node:fs/promises";
-import { Mesh, Portnums } from "./meshtastic.js";
+import { Mesh, Portnums } from "./meshtastic/meshtastic.js";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { initNodeDB } from "./nodedb/node_db.js";
 import { config } from "./config/config.js";

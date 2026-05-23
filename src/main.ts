@@ -1,16 +1,17 @@
-import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
+import { fromBinary } from "@bufbuild/protobuf";
 import * as mqtt from './mqtt.js';
-import { durationOrSeconds, envelopeHasPacket, formatPacketLog, getCmdlineOption, stringUidToNumber, toStringUserId } from './utils.js';
-import { createNodeInfoResponse, createPositionResponse, createTelemetryDeviceMetricsResponse, createTelemetryEnvironmentMetricsResponse } from './packets/response.js';
-import { PacketBuilder } from './packets/packet_builder.js';
+import { durationOrSeconds, envelopeHasPacket, formatPacketLog, getCmdlineOption } from './utils.js';
+import { defaultNodeInfoBinary, defaultPositionBinary } from './packets/response.js';
+import { TelemetryBuilder } from './meshtastic/builders.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
-import * as meshtastic from './meshtastic.js';
+import * as meshtastic from './meshtastic/meshtastic.js';
 import { initNodeDB } from "./nodedb/node_db.js";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { checkConfigSanity, config, loadConfig } from "./config/config.js";
 import { MetricsExporter } from "./metrics/metrics.js";
+import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.js";
 
 let configFile = getCmdlineOption("--config", "-c");
 
@@ -137,16 +138,33 @@ client.on("message", async (topic, message) => {
     await handleIncomingPacket(envelope, topic);
 });
 
-
-const DEFAULT_CHANNEL = "LongFast";
-
 async function sendNodeInfo() {
-    await mqtt.sendPacket(createNodeInfoResponse(DEFAULT_CHANNEL, 0xffffffff));
+    await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+        .defaults()
+        .packetPayload(packet => packet
+            .defaults()
+            .setDestination(0xffffffff)
+            .dataPayload(data => data
+                .setPortnum(meshtastic.Portnums.PortNum.NODEINFO_APP)
+                .setPayload(defaultNodeInfoBinary())
+            )
+        ).build()
+    );
     console.log("node info sent");
 }
 
 async function sendPosition() {
-    await mqtt.sendPacket(createPositionResponse(DEFAULT_CHANNEL, 0xffffffff));
+    await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+        .defaults()
+        .packetPayload(packet => packet
+            .defaults()
+            .setDestination(0xffffffff)
+            .dataPayload(data => data
+                .setPortnum(meshtastic.Portnums.PortNum.POSITION_APP)
+                .setPayload(defaultPositionBinary())
+            )
+        ).build()
+    );
     console.log("position sent");
 }
 
@@ -155,7 +173,24 @@ async function sendEnvironmentMetrics() {
         const metrics = await getEnvironmentMetrics();
         if (!metrics) return;
 
-        await mqtt.sendPacket(createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
+                    .setPayload(new TelemetryBuilder()
+                        .setTime(Math.floor(new Date().getTime() / 1000))
+                        .environmentMetrics(m => m
+                            .setTemperature(metrics.temperature)
+                            .setBarometricPressure(metrics.barometricPressure)
+                        )
+                        .buildBinary()
+                    )
+                )
+            ).build()
+        );
         console.log("environment metrics sent");
     } catch (e) {
         console.log("failed to send environment metrics:", e);
@@ -167,28 +202,45 @@ async function sendDeviceMetrics() {
         const metrics = await getDeviceMetrics();
         if (!metrics) return;
 
-        await mqtt.sendPacket(await createTelemetryDeviceMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
+                    .setPayload(new TelemetryBuilder()
+                        .setTime(Math.floor(new Date().getTime() / 1000))
+                        .deviceMetrics(m => m
+                            .setBatteryLevel(metrics.batteryLevel)
+                            .setUptimeSeconds(metrics.uptimeSeconds)
+                        )
+                        .buildBinary()
+                    )
+                )
+            ).build()
+        );
         console.log("device metrics sent");
     } catch (e) {
         console.log("failed to send device metrics:", e);
     }
 }
 
-async function sendTraceroute(dest: number) {
-    await mqtt.sendPacket(
-        new PacketBuilder()
-            .setChannelId(DEFAULT_CHANNEL)
-            .setDestination(dest)
-            .setPayload({
-                case: "decoded",
-                value: create(meshtastic.Mesh.DataSchema, {
-                    portnum: meshtastic.Portnums.PortNum.TRACEROUTE_APP,
-                    payload: toBinary(meshtastic.Mesh.RouteDiscoverySchema, create(meshtastic.Mesh.RouteDiscoverySchema, {})),
-                }),
-            })
-            .build()
-    );
-}
+// async function sendTraceroute(dest: number) {
+//     await mqtt.sendPacket(
+//         new PacketBuilder()
+//             .setChannelId(DEFAULT_CHANNEL)
+//             .setDestination(dest)
+//             .setPayload({
+//                 case: "decoded",
+//                 value: create(meshtastic.Mesh.DataSchema, {
+//                     portnum: meshtastic.Portnums.PortNum.TRACEROUTE_APP,
+//                     payload: toBinary(meshtastic.Mesh.RouteDiscoverySchema, create(meshtastic.Mesh.RouteDiscoverySchema, {})),
+//                 }),
+//             })
+//             .build()
+//     );
+// }
 
 const intervals = config.meshtastic.mesh.broadcast_intervals;
 const intervals_ms: Record<keyof typeof config.meshtastic.mesh.broadcast_intervals, number> = {

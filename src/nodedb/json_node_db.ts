@@ -1,5 +1,5 @@
 import { create } from '@bufbuild/protobuf';
-import * as meshtastic from '../meshtastic.js';
+import * as meshtastic from '../meshtastic/meshtastic.js';
 import { stringUidToNumber, toStringUserId } from '../utils.js';
 import fs from "node:fs";
 import type { NodeInfoStorage } from './node_db.js';
