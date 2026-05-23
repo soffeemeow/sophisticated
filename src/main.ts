@@ -7,10 +7,10 @@ import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.j
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
 import * as meshtastic from './meshtastic.js';
-import { getRegistry, initMeshtasticRxMetrics, initMetrics } from "./metrics/metrics.js";
 import { initNodeDB } from "./nodedb/node_db.js";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { checkConfigSanity, config, loadConfig } from "./config/config.js";
+import { MetricsExporter } from "./metrics/metrics.js";
 
 let configFile = getCmdlineOption("--config", "-c");
 
@@ -49,13 +49,11 @@ initNodeDB();
 initKeyPair(config.meshtastic.pki.private_key_path);
 await mqtt.initMQTT();
 
-let rxMetrics: ReturnType<typeof initMeshtasticRxMetrics> | undefined;
+const metricsExporter = new MetricsExporter();
 if (config.metrics.enabled) {
-    console.log("Initializing Prometheus Metrics...");
-    initMetrics();
-    const metricsRegistry = getRegistry();
-    rxMetrics = initMeshtasticRxMetrics(metricsRegistry);
-    mqtt.initMqttTxMetrics(metricsRegistry);
+    console.log(`"Starting Prometheus metrics server on http://${config.metrics.listen_address}:${config.metrics.listen_port}/metrics`);
+    mqtt.initMqttTxMetrics(metricsExporter.registry);
+    metricsExporter.serve(config.metrics.listen_address, config.metrics.listen_port);
 }
 
 class ReceivedPacketInfo {
@@ -123,28 +121,7 @@ client.on("message", async (topic, message) => {
         return;
     }
 
-    const labels = {
-        gateway: envelope.gatewayId,
-        channel: envelope.channelId,
-        from: toStringUserId(envelope.packet.from),
-        to: toStringUserId(envelope.packet.to),
-        relayNode: envelope.packet.relayNode.toString(16).padStart(2, "0"),
-        port: envelope.packet.payloadVariant.case === "decoded" ? envelope.packet.payloadVariant.value.portnum : 0,
-    };
-    
-    const histogramLabels = {
-        gateway: labels.gateway,
-        from: labels.from,
-        relayNode: labels.relayNode,
-    }
-
-    if (config.metrics.enabled && rxMetrics) {
-        rxMetrics.mesh_packets_received_counter.inc(labels);
-
-        rxMetrics.mesh_packets_received_hops_histogram.observe(histogramLabels, envelope.packet.hopStart - envelope.packet.hopLimit);
-        rxMetrics.mesh_packets_received_rssi_histogram.observe(histogramLabels, envelope.packet.rxRssi);
-        rxMetrics.mesh_packets_received_snr_histogram.observe(histogramLabels, envelope.packet.rxSnr);
-    }
+    metricsExporter.collectIncomingPacketMetrics(envelope);
 
     const packetInfo = ReceivedPacketInfo.fromPacket(envelope.packet);
     if (receivedPackets.findIndex(p => p.compare(packetInfo)) !== -1) {
@@ -174,19 +151,27 @@ async function sendPosition() {
 }
 
 async function sendEnvironmentMetrics() {
-    const metrics = await getEnvironmentMetrics();
-    if (!metrics) return;
+    try {
+        const metrics = await getEnvironmentMetrics();
+        if (!metrics) return;
 
-    await mqtt.sendPacket(createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
-    console.log("environment metrics sent");
+        await mqtt.sendPacket(createTelemetryEnvironmentMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
+        console.log("environment metrics sent");
+    } catch (e) {
+        console.log("failed to send environment metrics:", e);
+    }
 }
 
 async function sendDeviceMetrics() {
-    const metrics = await getDeviceMetrics();
-    if (!metrics) return;
+    try {
+        const metrics = await getDeviceMetrics();
+        if (!metrics) return;
 
-    await mqtt.sendPacket(await createTelemetryDeviceMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
-    console.log("device metrics sent");
+        await mqtt.sendPacket(await createTelemetryDeviceMetricsResponse(DEFAULT_CHANNEL, 0xffffffff, metrics));
+        console.log("device metrics sent");
+    } catch (e) {
+        console.log("failed to send device metrics:", e);
+    }
 }
 
 async function sendTraceroute(dest: number) {
