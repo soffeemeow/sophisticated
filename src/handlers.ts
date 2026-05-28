@@ -2,7 +2,7 @@ import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as meshtastic from './meshtastic/meshtastic.js';
 import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
-import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats } from "./telemetry.js";
+import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats, prometheusResultToNumber, queryPrometheus } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
 import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
 import { config } from "./config/config.js";
@@ -482,6 +482,82 @@ TextCommandHandlers.push({
                     .setReplyId(ctx.packet.id)
                     .setPayload(Buffer.from(emoji, "utf-8"))
                     .setEmoji(Number(true))
+                )
+            ).build()
+        );
+    }
+});
+
+TextCommandHandlers.push({
+    name: "stats",
+    test: (ctx) => {
+        if (ctx.isEncrypted) return false;
+        if (!config.bot.modules.stats.enabled) return false;
+        if (!config.bot.modules.stats.channels.includes(ctx.packet.channelId)) return false;
+
+        return ctx.message.toLowerCase() === "stats";
+    },
+    handler: async (ctx) => {
+        const metrics: { name: string, value1h: number | string, value24h: number | string }[] = [
+            {
+                name: "Pkts. RX",
+                value1h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_packets_rx.last_1h
+                )),
+                value24h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_packets_rx.last_24h
+                )),
+            },
+            {
+                name: "Nodes Seen",
+                value1h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_nodes_seen.last_1h
+                )),
+                value24h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_nodes_seen.last_24h
+                )),
+            },
+            {
+                name: "Uniq. Relays",
+                value1h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_uniq_relays.last_1h
+                )),
+                value24h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_uniq_relays.last_24h
+                )),
+            },
+            {
+                name: "P95 Hops",
+                value1h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_hops.last_1h
+                )).toFixed(2),
+                value24h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_hops.last_24h
+                )).toFixed(2),
+            },
+            {
+                name: "P95 Pkt.Size",
+                value1h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_size.last_1h
+                )).toFixed(2),
+                value24h: prometheusResultToNumber(await queryPrometheus(
+                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_size.last_24h
+                )).toFixed(2),
+            }
+        ]
+
+        const reply = `Metric: 1h (24h)\n---\n` + metrics.map(m => `${m.name}: ${m.value1h} (${m.value24h})`).join("\n");
+
+        await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
+            .defaults()
+            .setChannelId(ctx.packet.channelId)
+            .packetPayload(packet => packet
+                .defaults()
+                .setDestination(0xffffffff)
+                .dataPayload(data => data
+                    .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
+                    .setReplyId(ctx.packet.id)
+                    .setPayload(Buffer.from(reply, "utf-8"))
                 )
             ).build()
         );

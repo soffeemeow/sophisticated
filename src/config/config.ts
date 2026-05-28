@@ -78,12 +78,38 @@ export interface PingModuleConfig extends BOTModuleConfig {
     six_seven_proc: number;
 }
 
+export interface StatsModuleConfig extends BOTModuleConfig {
+    prometheus_queries: {
+        meshtastic_packets_rx: {
+            last_1h: string;
+            last_24h: string;
+        },
+        meshtastic_nodes_seen: {
+            last_1h: string;
+            last_24h: string;
+        },
+        meshtastic_uniq_relays: {
+            last_1h: string;
+            last_24h: string;
+        },
+        meshtastic_p95_hops: {
+            last_1h: string;
+            last_24h: string;
+        },
+        meshtastic_p95_size: {
+            last_1h: string;
+            last_24h: string;
+        },
+    }
+}
+
 export interface BOTConfig {
     enabled: boolean;
     modules: {
         weather: BOTModuleConfig;
         animals: BOTModuleConfig;
         ping: PingModuleConfig;
+        stats: StatsModuleConfig;
     }
 }
 
@@ -164,17 +190,43 @@ export function getDefaultConfig(): Config {
             modules: {
                 ping: {
                     enabled: false,
-                    channels: [ "LongFast" ],
+                    channels: ["LongFast"],
                     six_seven_enabled: false,
                     six_seven_proc: 0.35
                 },
                 weather: {
                     enabled: false,
-                    channels: [ "LongFast" ]
+                    channels: ["LongFast"]
                 },
                 animals: {
                     enabled: false,
-                    channels: [ "LongFast" ]
+                    channels: ["LongFast"]
+                },
+                stats: {
+                    enabled: false,
+                    channels: ["LongFast"],
+                    prometheus_queries: {
+                        meshtastic_packets_rx: {
+                            last_1h: '0',
+                            last_24h: '0'
+                        },
+                        meshtastic_nodes_seen: {
+                            last_1h: '0',
+                            last_24h: '0'
+                        },
+                        meshtastic_uniq_relays: {
+                            last_1h: '0',
+                            last_24h: '0'
+                        },
+                        meshtastic_p95_hops: {
+                            last_1h: '0',
+                            last_24h: '0'
+                        },
+                        meshtastic_p95_size: {
+                            last_1h: '0',
+                            last_24h: '0'
+                        }
+                    }
                 }
             }
         },
@@ -269,6 +321,10 @@ export function checkConfigSanity(config: Config) {
     if (!(config.meshtastic.node.role in allowedRoles) || !allowedRoles[config.meshtastic.node.role as keyof AllowedRolesTable]) {
         const allowed = Object.entries(allowedRoles).filter(r => r[1]).map(r => r[0]).join(", ");
         problems.push(`value of '<root>.meshtastic.node.role' must be one of ${allowed}`);
+    }
+
+    if (config.bot.modules.stats.enabled && !config.bot.modules.stats.prometheus_queries) {
+        problems.push(`bot module 'stats' is enabled, but prometheus_queries not set.`);
     }
 
     // #TODO: validate config.meshtastic.mesh.broadcast_intervals

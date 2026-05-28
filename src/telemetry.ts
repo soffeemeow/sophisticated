@@ -8,7 +8,7 @@ const counters = {
     numRxDupe: 0,
 }
 
-async function queryPrometheus(query: string, time: Date = new Date()) {
+export async function queryPrometheus(query: string, time: Date = new Date()) {
     if (!config.prometheus) {
         throw new Error("Prometheus is not configured");
     }
@@ -38,18 +38,29 @@ async function queryPrometheus(query: string, time: Date = new Date()) {
     return body.data;
 }
 
+export function prometheusResultToNumber(result: any) {
+    if (!("resultType" in result)) {
+        throw new Error(`Object must contain 'resultType' property.`);
+    }
+    if (result.resultType !== "vector") {
+        throw new Error(`Unexpected result type '${result.resultType}', expected 'vector'`);
+    }
+
+    if (!("result" in result) || !Array.isArray(result.result) || result.result.length === 0) {
+        throw new Error(`Object must contain 'result' property of non-empty array type.`);
+    }
+    return parseFloat(result.result[0].value[1]);
+}
+
 export async function getEnvironmentMetrics() {
     if (!config.prometheus) return;
 
     const temperatureResult = await queryPrometheus(config.prometheus.queries.temperature);
     const pressureResult = await queryPrometheus(config.prometheus.queries.barometric_pressure);
-        
-    if (temperatureResult.resultType !== "vector" || pressureResult.resultType !== "vector") return;
-    if (temperatureResult.result.length === 0 || pressureResult.result.length === 0) return;
 
     return {
-        temperature: parseFloat(temperatureResult.result[0].value[1]),
-        barometricPressure: parseFloat(pressureResult.result[0].value[1]),
+        temperature: prometheusResultToNumber(temperatureResult),
+        barometricPressure: prometheusResultToNumber(pressureResult),
     }
 }
 

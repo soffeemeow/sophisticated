@@ -824,6 +824,298 @@ export const ConfigSchema: ObjectSchema<Config> = {
                                 object_schema: null
                             }
                         }
+                    },
+                    stats: {
+                        array: false,
+                        optional: false,
+                        type: {
+                            string: false,
+                            number: false,
+                            bigint: false,
+                            boolean: false,
+                            symbol: false,
+                            undefined: false,
+                            object: true,
+                            function: false
+                        },
+                        object_schema: {
+                            prometheus_queries: {
+                                array: false,
+                                optional: false,
+                                type: {
+                                    string: false,
+                                    number: false,
+                                    bigint: false,
+                                    boolean: false,
+                                    symbol: false,
+                                    undefined: false,
+                                    object: true,
+                                    function: false
+                                },
+                                object_schema: {
+                                    meshtastic_packets_rx: {
+                                        array: false,
+                                        optional: false,
+                                        type: {
+                                            string: false,
+                                            number: false,
+                                            bigint: false,
+                                            boolean: false,
+                                            symbol: false,
+                                            undefined: false,
+                                            object: true,
+                                            function: false
+                                        },
+                                        object_schema: {
+                                            last_1h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            },
+                                            last_24h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            }
+                                        }
+                                    },
+                                    meshtastic_nodes_seen: {
+                                        array: false,
+                                        optional: false,
+                                        type: {
+                                            string: false,
+                                            number: false,
+                                            bigint: false,
+                                            boolean: false,
+                                            symbol: false,
+                                            undefined: false,
+                                            object: true,
+                                            function: false
+                                        },
+                                        object_schema: {
+                                            last_1h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            },
+                                            last_24h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            }
+                                        }
+                                    },
+                                    meshtastic_uniq_relays: {
+                                        array: false,
+                                        optional: false,
+                                        type: {
+                                            string: false,
+                                            number: false,
+                                            bigint: false,
+                                            boolean: false,
+                                            symbol: false,
+                                            undefined: false,
+                                            object: true,
+                                            function: false
+                                        },
+                                        object_schema: {
+                                            last_1h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            },
+                                            last_24h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            }
+                                        }
+                                    },
+                                    meshtastic_p95_hops: {
+                                        array: false,
+                                        optional: false,
+                                        type: {
+                                            string: false,
+                                            number: false,
+                                            bigint: false,
+                                            boolean: false,
+                                            symbol: false,
+                                            undefined: false,
+                                            object: true,
+                                            function: false
+                                        },
+                                        object_schema: {
+                                            last_1h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            },
+                                            last_24h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            }
+                                        }
+                                    },
+                                    meshtastic_p95_size: {
+                                        array: false,
+                                        optional: false,
+                                        type: {
+                                            string: false,
+                                            number: false,
+                                            bigint: false,
+                                            boolean: false,
+                                            symbol: false,
+                                            undefined: false,
+                                            object: true,
+                                            function: false
+                                        },
+                                        object_schema: {
+                                            last_1h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            },
+                                            last_24h: {
+                                                array: false,
+                                                optional: false,
+                                                type: {
+                                                    string: true,
+                                                    number: false,
+                                                    bigint: false,
+                                                    boolean: false,
+                                                    symbol: false,
+                                                    undefined: false,
+                                                    object: false,
+                                                    function: false
+                                                },
+                                                object_schema: null
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            enabled: {
+                                array: false,
+                                optional: false,
+                                type: {
+                                    string: false,
+                                    number: false,
+                                    bigint: false,
+                                    boolean: true,
+                                    symbol: false,
+                                    undefined: false,
+                                    object: false,
+                                    function: false
+                                },
+                                object_schema: null
+                            },
+                            channels: {
+                                array: true,
+                                optional: false,
+                                type: {
+                                    string: true,
+                                    number: false,
+                                    bigint: false,
+                                    boolean: false,
+                                    symbol: false,
+                                    undefined: false,
+                                    object: false,
+                                    function: false
+                                },
+                                object_schema: null
+                            }
+                        }
                     }
                 }
             }
