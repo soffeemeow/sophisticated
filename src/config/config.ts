@@ -134,6 +134,9 @@ export interface Config {
     bot: BOTConfig;
     prometheus?: PrometheusConfig;
     metrics: MetricsConfig;
+    i_exactly_know_what_i_am_doing?: {
+        so_let_me_use_default_values_in_config?: boolean;
+    }
 }
 
 export function getDefaultConfig(): Config {
@@ -288,20 +291,27 @@ export function checkConfigSanity(config: Config) {
     const defaultConfig = getDefaultConfig();
     const problems = [];
 
-    for(const check of checkDefaults) {
-        let actualValue = config as any;
-        let defaultValue = defaultConfig as any;
+    if (config.i_exactly_know_what_i_am_doing?.so_let_me_use_default_values_in_config) {
+        console.warn(
+            "You disabled check of the default values in config, so be warned - something may break.", 
+            "You are on your own now."
+        );
+    } else {
+        for(const check of checkDefaults) {
+            let actualValue = config as any;
+            let defaultValue = defaultConfig as any;
 
-        for(const path of check) {
-            actualValue = actualValue[path];
-            defaultValue = defaultValue[path];
-        }
+            for(const path of check) {
+                actualValue = actualValue[path];
+                defaultValue = defaultValue[path];
+            }
 
-        if (actualValue === defaultValue) {
-            problems.push(`default value of '<root>.${check.join(".")}' must be changed`);
+            if (actualValue === defaultValue) {
+                problems.push(`default value of '<root>.${check.join(".")}' must be changed`);
+            }
         }
     }
-
+    
     if (config.mqtt.connection.port < 1 || config.mqtt.connection.port > 0xffff) {
         problems.push(`value of '<root>.mqtt.connection.port' must be in range 1-${0xffff}`);
     }
@@ -323,8 +333,8 @@ export function checkConfigSanity(config: Config) {
         problems.push(`value of '<root>.meshtastic.node.role' must be one of ${allowed}`);
     }
 
-    if (config.bot.modules.stats.enabled && !config.bot.modules.stats.prometheus_queries) {
-        problems.push(`bot module 'stats' is enabled, but prometheus_queries not set.`);
+    if (config.bot.modules.stats.enabled && !config.prometheus) {
+        problems.push(`bot module 'stats' is enabled, but '<root>.prometheus.enabled' is not.`);
     }
 
     // #TODO: validate config.meshtastic.mesh.broadcast_intervals

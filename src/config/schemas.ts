@@ -1258,5 +1258,36 @@ export const ConfigSchema: ObjectSchema<Config> = {
                 object_schema: null
             }
         }
+    },
+    i_exactly_know_what_i_am_doing: {
+        array: false,
+        optional: true,
+        type: {
+            string: false,
+            number: false,
+            bigint: false,
+            boolean: false,
+            symbol: false,
+            undefined: true,
+            object: true,
+            function: false
+        },
+        object_schema: {
+            so_let_me_use_default_values_in_config: {
+                array: false,
+                optional: true,
+                type: {
+                    string: false,
+                    number: false,
+                    bigint: false,
+                    boolean: true,
+                    symbol: false,
+                    undefined: true,
+                    object: false,
+                    function: false
+                },
+                object_schema: null
+            }
+        }
     }
 }
