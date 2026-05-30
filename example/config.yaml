@@ -1,0 +1,87 @@
+mqtt:
+  connection:
+    host: mqtt-server
+    port: 1883
+    user: sophisticated
+  root_topic: msh
+  gateway: "CHANGE_ME"
+  encryption: true
+
+meshtastic:
+  node:
+    id: "!66677767"
+    name:
+      short: "🛸"
+      long: "Sophisticated Dev 🛸"
+    role: CLIENT_MUTE
+    is_unmessageable: true
+  mesh:
+    broadcast_intervals:
+      position: 24h
+      node_info: 6h
+      device_metrics: 6h
+      environment_metrics: 10m
+    hop_limits:
+      all: 5
+      bg_telemetry: 3
+  state_file_path: /data/state.json
+  pki:
+    private_key_path: /data/private.key
+  node_db:
+    type: json
+    json_db_file_path: /data/nodedb.json
+
+channels:
+  - name: MediumFast
+    psk: AQ==
+    primary: true
+
+bot:
+  enabled: true
+  modules:
+    ping:
+      enabled: true
+      channels:
+        - MediumFast
+      six_seven_enabled: true
+      six_seven_proc: 0.35
+    weather:
+      enabled: true
+      channels:
+        - MediumFast
+    animals:
+      enabled: true
+      channels:
+        - MediumFast
+    stats:
+      enabled: true
+      channels:
+        - MediumFast
+      prometheus_queries:
+        meshtastic_packets_rx:
+          last_1h: floor(sum(rate(meshtastic_mesh_packets_received_count[1h])) * 3600)
+          last_24h: floor(sum(rate(meshtastic_mesh_packets_received_count[24h])) * 3600 * 24)
+        meshtastic_nodes_seen:
+          last_1h: count(sum(rate(meshtastic_mesh_packets_received_count[1h])) by (from) != 0)
+          last_24h: count(sum(rate(meshtastic_mesh_packets_received_count[24h])) by (from) != 0)
+        meshtastic_uniq_relays:
+          last_1h: count(sum(rate(meshtastic_mesh_packets_received_count[1h])) by (relayNode) != 0)
+          last_24h: count(sum(rate(meshtastic_mesh_packets_received_count[24h])) by (relayNode) != 0)
+        meshtastic_p95_hops:
+          last_1h: histogram_quantile(0.95, sum(rate(meshtastic_mesh_packets_received_hops_bucket{}[1h])) by (le))
+          last_24h: histogram_quantile(0.95, sum(rate(meshtastic_mesh_packets_received_hops_bucket{}[24h])) by (le))
+        meshtastic_p95_size:
+          last_1h: histogram_quantile(0.95, sum(rate(meshtastic_mesh_packets_received_size_bucket{}[1h])) by (le))
+          last_24h: histogram_quantile(0.95, sum(rate(meshtastic_mesh_packets_received_size_bucket{}[24h])) by (le))
+
+prometheus:
+  enabled: true
+  url: http://prometheus:9090
+  queries:
+    temperature: '0'
+    barometric_pressure: '0'
+
+metrics:
+  enabled: true
+  listen_address: 0.0.0.0
+  listen_port: 9067

@@ -12,11 +12,14 @@ RUN pnpm run build && pnpm prune --prod
 
 FROM node:22-alpine AS final
 
-ARG USERNAME=msh
-ARG USER_UID=1001
+ARG USERNAME=sophisticated
+ARG USER_UID=967
 ARG USER_GID=$USER_UID
 
 RUN adduser -D -u $USER_UID -h /app $USERNAME $USER_GID
+
+RUN mkdir /data && chown $USERNAME:$USERNAME /data
+VOLUME /data
 
 USER $USERNAME
 
