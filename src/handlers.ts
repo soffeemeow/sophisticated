@@ -1,14 +1,15 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as meshtastic from './meshtastic/meshtastic.js';
-import { envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
+import { ConcurrentPool, envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
-import { getDeviceMetrics, getEnvironmentMetrics, getLocalStats, prometheusResultToNumber, queryPrometheus } from "./telemetry.js";
+import { getDeviceMetrics, getEnvironmentMetrics } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
 import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
 import { config } from "./config/config.js";
 import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.js";
 import { TelemetryBuilder } from "./meshtastic/builders.js";
 import { defaultNodeInfoBinary, defaultPositionBinary } from "./packets/response.js";
+import { InstantVector, prometheus } from "./prometheus.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
@@ -488,6 +489,52 @@ TextCommandHandlers.push({
     }
 });
 
+class StatsMetric {
+    private value1h?: () => InstantVector[];
+    private value24h?: () => InstantVector[];
+    private decimalPlaces: number = 0;
+    constructor(public name: string) {}
+
+    public setDecimalPlaces(v: number) {
+        this.decimalPlaces = v;
+        return this;
+    }
+
+    public setValue1h(v: () => InstantVector[]) {
+        this.value1h = v;
+        return this;
+    }
+
+    public setValue24h(v: () => InstantVector[]) {
+        this.value24h = v;
+        return this;
+    }
+
+    private formatInstantVector(v: InstantVector[] | undefined) {
+        if (v && v[0] && v[0].hasScalarValue()) {
+            return v[0].value.value.toFixed(this.decimalPlaces);
+        } else {
+            return "-";
+        }
+    }
+
+    public format(): string {
+        const v1 = this.value1h ? this.value1h() : undefined;
+        const v24 = this.value24h ? this.value24h() : undefined;
+
+        return `${this.name}: ${this.formatInstantVector(v1)} (${this.formatInstantVector(v24)})`;
+    }
+
+    public toString() {
+        return this.format();
+    }
+
+    public static getFormat(): string {
+        return "Metric: 1h (24h)";
+    }
+}
+
+
 TextCommandHandlers.push({
     name: "stats",
     test: (ctx) => {
@@ -498,55 +545,56 @@ TextCommandHandlers.push({
         return ctx.message.toLowerCase() === "stats";
     },
     handler: async (ctx) => {
-        const metrics: { name: string, value1h: number | string, value24h: number | string }[] = [
-            {
-                name: "Pkts. RX",
-                value1h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_packets_rx.last_1h
-                )),
-                value24h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_packets_rx.last_24h
-                )),
-            },
-            {
-                name: "Nodes Seen",
-                value1h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_nodes_seen.last_1h
-                )),
-                value24h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_nodes_seen.last_24h
-                )),
-            },
-            {
-                name: "Uniq. Relays",
-                value1h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_uniq_relays.last_1h
-                )),
-                value24h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_uniq_relays.last_24h
-                )),
-            },
-            {
-                name: "P95 Hops",
-                value1h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_hops.last_1h
-                )).toFixed(2),
-                value24h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_hops.last_24h
-                )).toFixed(2),
-            },
-            {
-                name: "P95 Pkt.Size",
-                value1h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_size.last_1h
-                )).toFixed(2),
-                value24h: prometheusResultToNumber(await queryPrometheus(
-                    config.bot.modules.stats.prometheus_queries.meshtastic_p95_size.last_24h
-                )).toFixed(2),
-            }
+        const queries = config.bot.modules.stats.prometheus_queries;
+        const pool = new ConcurrentPool<InstantVector[]>();
+
+        const metrics: StatsMetric[] = [
+            new StatsMetric("Pkts. RX")
+                .setValue1h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_packets_rx.last_1h
+                )))
+                .setValue24h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_packets_rx.last_24h
+                ))),
+
+            new StatsMetric("Nodes Seen")
+                .setValue1h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_nodes_seen.last_1h
+                )))
+                .setValue24h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_nodes_seen.last_24h
+                ))),
+
+            new StatsMetric("Uniq. Relays")
+                .setValue1h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_uniq_relays.last_1h
+                )))
+                .setValue24h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_uniq_relays.last_24h
+                ))),
+
+            new StatsMetric("P95 Hops")
+                .setDecimalPlaces(2)
+                .setValue1h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_p95_hops.last_1h
+                )))
+                .setValue24h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_p95_hops.last_24h
+                ))),
+
+            new StatsMetric("P95 Pkt.Size")
+                .setDecimalPlaces(2)
+                .setValue1h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_p95_size.last_1h
+                )))
+                .setValue24h(pool.push(prometheus.instantQuery(
+                    queries.meshtastic_p95_size.last_24h
+                ))),
         ]
 
-        const reply = `Metric: 1h (24h)\n---\n` + metrics.map(m => `${m.name}: ${m.value1h} (${m.value24h})`).join("\n");
+        await pool.runAll();
+
+        const reply = `${StatsMetric.getFormat()}\n---\n` + metrics.join("\n");
 
         await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
             .defaults()

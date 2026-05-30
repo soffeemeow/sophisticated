@@ -12,6 +12,7 @@ import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { checkConfigSanity, config, loadConfig } from "./config/config.js";
 import { MetricsExporter } from "./metrics/metrics.js";
 import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.js";
+import { initPrometheusAPI } from "./prometheus.js";
 
 let configFile = getCmdlineOption("--config", "-c");
 
@@ -44,6 +45,10 @@ if (configProblems.length > 0) {
         ].join("\n")
     );
     process.exit(1);
+}
+
+if (config.prometheus) {
+    initPrometheusAPI(config.prometheus.url);
 }
 
 initNodeDB();

@@ -31,6 +31,25 @@ export function durationOrSeconds(value: string | number, default_seconds?: numb
     return result;
 }
 
+export class ConcurrentPool<T> {
+    private promises: Promise<T>[] = [];
+    private results: T[] | undefined;
+
+    public push(p: Promise<T>): () => T {
+        const index = this.promises.push(p) - 1;
+        return (() => {
+            if (!this.results) {
+                throw new Error("No results yet.");
+            }
+            // #FIXME maybe we should check it before returning or idk
+            return this.results[index]!;
+        }).bind(this);
+    }
+
+    public async runAll() {
+        this.results = await Promise.all(this.promises);
+    }
+}
 
 export function mshStringRoleToEnum(role: MeshtasticRoles) {
     switch(role) {
