@@ -12,7 +12,7 @@ meshtastic:
     id: "!66677767"
     name:
       short: "🛸"
-      long: "Sophisticated Dev 🛸"
+      long: "Sophisticated Example 🛸"
     role: CLIENT_MUTE
     is_unmessageable: true
   mesh:
