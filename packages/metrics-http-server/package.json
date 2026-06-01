@@ -1,0 +1,19 @@
+{
+  "name": "@sophisticated/metrics-http-server",
+  "version": "1.0.0",
+  "description": "HTTP server for metrics registry",
+  "main": "./dist/server.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "tsc"
+  },
+  "keywords": [],
+  "author": "soffee",
+  "license": "AGPL-3.0-only",
+  "packageManager": "pnpm@10.28.0",
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "typescript": "^5.8.3"
+  }
+}

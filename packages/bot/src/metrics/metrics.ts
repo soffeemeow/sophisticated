@@ -1,11 +1,11 @@
 import { collectDefaultMetrics, Counter, Histogram, linearBuckets, Registry } from "prom-client";
-import { MetricsServer } from "./server.js";
+import { MetricsServer } from "@sophisticated/metrics-http-server";
 import * as meshtastic from '@sophisticated/meshtastic-proto';
 import { toStringUserId } from "../utils.js";
 import { toBinary } from "@bufbuild/protobuf";
 
 export class MetricsExporter {
-    private server: MetricsServer | undefined;
+    private server: MetricsServer<Registry> | undefined;
     public readonly registry = new Registry();
 
     public readonly mesh_packets_received_counter = new Counter({

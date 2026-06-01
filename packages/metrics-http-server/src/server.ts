@@ -1,11 +1,15 @@
-import type { Registry } from "prom-client";
 import http from "node:http";
 
-export class MetricsServer {
-    private _registry: Registry;
+export interface MetricsRegistry {
+    metrics(): Promise<string>;
+    contentType: string;
+}
+
+export class MetricsServer<T extends MetricsRegistry> {
+    private _registry: T;
     private _httpServer?: http.Server;
 
-    public constructor(registry: Registry) {
+    public constructor(registry: T) {
         this._registry = registry;
     }
 

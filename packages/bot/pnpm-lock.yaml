@@ -17,6 +17,9 @@ importers:
       '@sophisticated/meshtastic-proto':
         specifier: ../meshtastic-proto
         version: link:../meshtastic-proto
+      '@sophisticated/metrics-http-server':
+        specifier: ../metrics-http-server
+        version: link:../metrics-http-server
       dotenv-cli:
         specifier: ^8.0.0
         version: 8.0.0
