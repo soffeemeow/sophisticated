@@ -1,8 +1,7 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from "node:crypto";
-import { Keypair } from "./keypair.js";
+import { createNonce, Keypair } from "@sophisticated/meshtastic-crypto";
 import { x25519 } from "@noble/curves/ed25519.js";
 import { Mesh } from "@sophisticated/meshtastic-proto";
-import { createNonce } from "./crypto.js";
 import { nodedb } from "../nodedb/node_db.js";
 import { toBinary } from "@bufbuild/protobuf";
 

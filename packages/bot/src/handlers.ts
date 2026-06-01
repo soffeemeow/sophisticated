@@ -4,7 +4,7 @@ import { ConcurrentPool, envelopeToIncomingPacket, formatPacketLog, stringUidToN
 import * as mqtt from './mqtt.js';
 import { getDeviceMetrics, getEnvironmentMetrics } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
-import { decryptPacket, defaultPSK } from "./crypto/crypto.js";
+import { createNonce, decrypt, PSK } from "@sophisticated/meshtastic-crypto";
 import { config } from "./config/config.js";
 import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.js";
 import { TelemetryBuilder } from "./meshtastic/builders.js";
@@ -285,8 +285,12 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
         //     }
         // }
         if (!envelope.packet.pkiEncrypted) {
-            try {
-                const result = decryptPacket(defaultPSK, envelope.packet);
+            try {                
+                const channelPSK = config.channels.find(c => c.name === envelope.channelId)?.psk;
+                const psk = channelPSK ? PSK.fromBase64String(channelPSK) : PSK.defaultPSK;
+
+                const nonce = createNonce(envelope.packet.from, envelope.packet.id);
+                const result = decrypt(psk, nonce, envelope.packet.payloadVariant.value);
                 const data = fromBinary(meshtastic.Mesh.DataSchema, result);
 
                 envelope.packet.payloadVariant = {

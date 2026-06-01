@@ -16,6 +16,7 @@
   "dependencies": {
     "@sophisticated/meshtastic-proto": "../meshtastic-proto",
     "@sophisticated/metrics-http-server": "../metrics-http-server",
+    "@sophisticated/meshtastic-crypto": "../meshtastic-crypto",
     "@bufbuild/protobuf": "2.11.0",
     "@noble/curves": "^2.2.0",
     "dotenv-cli": "^8.0.0",

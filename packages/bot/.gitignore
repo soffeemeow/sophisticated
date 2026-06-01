@@ -1,2 +1,9 @@
 dist
 node_modules
+*.env
+*.msh
+nodedb.json
+sophisticated-nodedb.json
+private.key
+/config.yml
+/config.yaml

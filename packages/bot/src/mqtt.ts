@@ -4,7 +4,7 @@ import { toBinary } from "@bufbuild/protobuf";
 import { counters } from './telemetry.js';
 import { Counter, Registry } from 'prom-client';
 import { formatPacketLog, getChannelHash, toStringUserId } from './utils.js';
-import { encryptPacket, pskFromString } from './crypto/crypto.js';
+import { createNonce, encrypt, PSK } from '@sophisticated/meshtastic-crypto';
 import { config } from './config/config.js';
 
 let client: mqtt.MqttClient;
@@ -47,7 +47,7 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         throw new Error("Packet is empty in ServiceEnvelope.");
     }
 
-    if (config.mqtt.encryption && envelope.packet.payloadVariant.case !== "encrypted") {
+    if (config.mqtt.encryption && envelope.packet.payloadVariant.case === "decoded") {
         const channel = config.channels.find(c => c.name === envelope.channelId);
 
         if (!channel) {
@@ -55,12 +55,13 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
             return;
         }
 
-        const psk = pskFromString(channel.psk);
+        const psk = PSK.fromBase64String(channel.psk);
+        const nonce = createNonce(envelope.packet.from, envelope.packet.id);
 
         envelope.packet.channel = getChannelHash(envelope.channelId, psk);
         envelope.packet.payloadVariant = {
             case: "encrypted",
-            value: encryptPacket(psk, envelope.packet),
+            value: encrypt(psk, nonce, toBinary(meshtastic.Mesh.DataSchema,envelope.packet.payloadVariant.value)),
         };
     }
 

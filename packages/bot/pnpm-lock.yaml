@@ -14,6 +14,9 @@ importers:
       '@noble/curves':
         specifier: ^2.2.0
         version: 2.2.0
+      '@sophisticated/meshtastic-crypto':
+        specifier: ../meshtastic-crypto
+        version: link:../meshtastic-crypto
       '@sophisticated/meshtastic-proto':
         specifier: ../meshtastic-proto
         version: link:../meshtastic-proto
