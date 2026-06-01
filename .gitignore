@@ -1,6 +1,4 @@
 data
-dist
-src/gen
 node_modules
 *.env
 *.msh
