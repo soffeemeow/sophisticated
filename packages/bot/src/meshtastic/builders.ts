@@ -1,5 +1,5 @@
 import { create, toBinary, type Message } from "@bufbuild/protobuf";
-import * as meshtastic from './meshtastic.js';
+import * as meshtastic from '@sophisticated/meshtastic-proto';
 
 type BuilderSettersFrom<T, R = T> = {
     [K in keyof T as `set${Capitalize<K & string>}`]: (v: NonNullable<T[K]>) => R;

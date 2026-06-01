@@ -1,5 +1,5 @@
 import { create, toBinary } from "@bufbuild/protobuf";
-import * as meshtastic from '../meshtastic/meshtastic.js';
+import * as meshtastic from '@sophisticated/meshtastic-proto';
 import { keypair } from "../crypto/pki.js";
 import { config } from "../config/config.js";
 import { mshStringRoleToEnum, type MeshtasticRoles } from "../utils.js";

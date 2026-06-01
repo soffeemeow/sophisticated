@@ -1,9 +1,10 @@
-import * as meshtastic from './meshtastic/meshtastic.js';
+import * as meshtastic from '@sophisticated/meshtastic-proto';
 import parseDuration from 'parse-duration';
 
 export type PartialBy<T, K extends keyof T> = Omit<T, K> & Partial<Pick<T, K>>
 export type RequiredBy<T, K extends keyof T> = Omit<T, K> & Required<Pick<T, K>>
 export type ReadonlyBy<T, K extends keyof T> = Omit<T, K> & Readonly<Pick<T, K>>
+export type NonNullableBy<T, K extends keyof T> = Omit<T, K> & NonNullable<Pick<T, K>>
 export type ArrayElement<A extends readonly unknown[]> = A extends readonly (infer E)[] ? E : never;
 export type AllNullable<T> = {
     [P in keyof T]: AllNullable<T[P] | undefined>;

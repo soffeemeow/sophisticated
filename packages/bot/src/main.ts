@@ -6,7 +6,7 @@ import { TelemetryBuilder } from './meshtastic/builders.js';
 import { counters, getDeviceMetrics, getEnvironmentMetrics } from './telemetry.js';
 import { client } from "./mqtt.js";
 import { handleIncomingPacket } from "./handlers.js";
-import * as meshtastic from './meshtastic/meshtastic.js';
+import * as meshtastic from '@sophisticated/meshtastic-proto';
 import { initNodeDB } from "./nodedb/node_db.js";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { checkConfigSanity, config, loadConfig } from "./config/config.js";

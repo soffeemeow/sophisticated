@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
-import * as meshtastic from './meshtastic/meshtastic.js';
-import { ConcurrentPool, envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type RequiredBy } from "./utils.js";
+import * as meshtastic from '@sophisticated/meshtastic-proto';
+import { ConcurrentPool, envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type NonNullableBy, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
 import { getDeviceMetrics, getEnvironmentMetrics } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
@@ -14,7 +14,9 @@ import { InstantVector, prometheus } from "./prometheus.js";
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
 
-async function handleTelemetryApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+type PopulatedServiceEnvelope = RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">;
+
+async function handleTelemetryApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
