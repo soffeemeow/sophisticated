@@ -1,6 +1,6 @@
 import { config } from "../config/config.js";
 import { stringUidToNumber } from "../utils.js";
-import { MeshPacketBuilder, ServiceEnvelopeBuilder } from "../meshtastic/builders.js";
+import { MeshDataBuilder, MeshPacketBuilder, ServiceEnvelopeBuilder } from "../meshtastic/builders.js";
 
 export class ServiceEnvelopeBuilderWithDefaults extends ServiceEnvelopeBuilder {
     public defaults() {
@@ -25,6 +25,18 @@ export class MeshPacketBuilderWithDefaults extends MeshPacketBuilder {
         this.setFrom(stringUidToNumber(config.meshtastic.node.id));
         this.setHopLimit(config.meshtastic.mesh.hop_limits.all);
         this.setHopStart(config.meshtastic.mesh.hop_limits.all);
+        return this;
+    }
+
+    public override dataPayload(callback: (b: MeshDataBuilderWithDefaults) => MeshDataBuilderWithDefaults) {
+        this.setPayload(callback(new MeshDataBuilderWithDefaults()).build());
+        return this;
+    }
+}
+
+export class MeshDataBuilderWithDefaults extends MeshDataBuilder {
+    public defaults() {
+        this.setOkToMQTT(config.meshtastic.mesh.ok_to_mqtt);
         return this;
     }
 }

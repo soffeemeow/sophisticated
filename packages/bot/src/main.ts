@@ -150,6 +150,7 @@ async function sendNodeInfo() {
             .defaults()
             .setDestination(0xffffffff)
             .dataPayload(data => data
+                .defaults()
                 .setPortnum(meshtastic.Portnums.PortNum.NODEINFO_APP)
                 .setPayload(defaultNodeInfoBinary())
             )
@@ -165,6 +166,7 @@ async function sendPosition() {
             .defaults()
             .setDestination(0xffffffff)
             .dataPayload(data => data
+                .defaults()
                 .setPortnum(meshtastic.Portnums.PortNum.POSITION_APP)
                 .setPayload(defaultPositionBinary())
             )
@@ -184,6 +186,7 @@ async function sendEnvironmentMetrics() {
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
                     .setPayload(new TelemetryBuilder()
                         .setTime(Math.floor(new Date().getTime() / 1000))
@@ -213,6 +216,7 @@ async function sendDeviceMetrics() {
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
                     .setPayload(new TelemetryBuilder()
                         .setTime(Math.floor(new Date().getTime() / 1000))

@@ -456,6 +456,21 @@ export const ConfigSchema: ObjectSchema<Config> = {
                                 object_schema: null
                             }
                         }
+                    },
+                    ok_to_mqtt: {
+                        array: false,
+                        optional: false,
+                        type: {
+                            string: false,
+                            number: false,
+                            bigint: false,
+                            boolean: true,
+                            symbol: false,
+                            undefined: false,
+                            object: false,
+                            function: false
+                        },
+                        object_schema: null
                     }
                 }
             },

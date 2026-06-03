@@ -37,6 +37,7 @@ export interface NodeConfig {
 }
 
 export interface MeshConfig {
+    ok_to_mqtt: boolean;
     broadcast_intervals: {
         position: string | number;
         node_info: string | number;
@@ -170,7 +171,8 @@ export function getDefaultConfig(): Config {
                 hop_limits: {
                     all: 3,
                     bg_telemetry: 1
-                }
+                },
+                ok_to_mqtt: false
             },
             state_file_path: './state.json',
             pki: {

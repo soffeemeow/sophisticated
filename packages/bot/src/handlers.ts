@@ -76,6 +76,7 @@ async function handleTelemetryApp(envelope: PopulatedServiceEnvelope, receivedTo
                 .defaults()
                 .setDestination(envelope.packet.from)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TELEMETRY_APP)
                     .setRequestId(envelope.packet.id)
                     .setPayload(responseBuilder.buildBinary())
@@ -105,6 +106,7 @@ async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceE
                 .defaults()
                 .setDestination(envelope.packet.from)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TRACEROUTE_APP)
                     .setRequestId(envelope.packet.id)
                     .setPayload(toBinary(meshtastic.Mesh.RouteDiscoverySchema, routeDiscovery))
@@ -129,6 +131,7 @@ async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
                 .defaults()
                 .setDestination(envelope.packet.from)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.NODEINFO_APP)
                     .setRequestId(envelope.packet.id)
                     .setPayload(defaultNodeInfoBinary())
@@ -157,6 +160,7 @@ async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
                 .defaults()
                 .setDestination(envelope.packet.from)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.POSITION_APP)
                     .setRequestId(envelope.packet.id)
                     .setPayload(defaultPositionBinary())
@@ -351,6 +355,7 @@ TextCommandHandlers.push({
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
                     .setReplyId(ctx.packet.id)
                     .setPayload(Buffer.from(response, "utf-8"))
@@ -391,6 +396,7 @@ TextCommandHandlers.push({
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
                     .setReplyId(ctx.packet.id)
                     .setPayload(Buffer.from(response, "utf-8"))
@@ -485,6 +491,7 @@ TextCommandHandlers.push({
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
                     .setReplyId(ctx.packet.id)
                     .setPayload(Buffer.from(emoji, "utf-8"))
@@ -609,6 +616,7 @@ TextCommandHandlers.push({
                 .defaults()
                 .setDestination(0xffffffff)
                 .dataPayload(data => data
+                    .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
                     .setReplyId(ctx.packet.id)
                     .setPayload(Buffer.from(reply, "utf-8"))

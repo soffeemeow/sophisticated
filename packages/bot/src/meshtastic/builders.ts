@@ -1,6 +1,12 @@
 import { create, toBinary, type Message } from "@bufbuild/protobuf";
 import * as meshtastic from '@sophisticated/meshtastic-proto';
 
+/**
+ * https://github.com/meshtastic/firmware/blob/f86cb7781e136e6a8ab7000054c00eead2a6dbfc/src/mesh/Router.h#L176
+*/
+const BITFIELD_WANT_RESPONSE_SHIFT = 1;
+const BITFIELD_OK_TO_MQTT_SHIFT = 0;
+
 type BuilderSettersFrom<T, R = T> = {
     [K in keyof T as `set${Capitalize<K & string>}`]: (v: NonNullable<T[K]>) => R;
 }
@@ -182,7 +188,7 @@ type MeshDataType = Required<Omit<meshtastic.Mesh.Data, keyof Message>>;
 export class MeshDataBuilder implements BuilderSettersFrom<MeshDataType, MeshDataBuilder> {
     private data: Partial<MeshDataType> = {};
 
-    public setPayload(v: Uint8Array<ArrayBufferLike>): MeshDataBuilder {
+    public setPayload(v: Uint8Array<ArrayBufferLike>) {
         this.data.payload = v;
         return this;
     }
@@ -192,7 +198,11 @@ export class MeshDataBuilder implements BuilderSettersFrom<MeshDataType, MeshDat
         return this;
     }
 
+    // want_response is actually populated only on message rx, so we should put it into bitfield directly 
+    // and sync pb value with it. 
+    // https://github.com/meshtastic/firmware/blob/f86cb7781e136e6a8ab7000054c00eead2a6dbfc/src/mesh/Router.cpp#L533
     public setWantResponse(v: boolean) {
+        this.setBitfieldBit(BITFIELD_WANT_RESPONSE_SHIFT, v);
         this.data.wantResponse = v;
         return this;
     }
@@ -224,6 +234,20 @@ export class MeshDataBuilder implements BuilderSettersFrom<MeshDataType, MeshDat
 
     public setBitfield(v: number) {
         this.data.bitfield = v;
+        return this;
+    }
+
+    public setBitfieldBit(bit: number, value: boolean) {
+        if (value) {
+            this.data.bitfield = (this.data.bitfield ?? 0) | (1 << bit);
+        } else {
+            this.data.bitfield = (this.data.bitfield ?? 0) & ~(1 << bit);
+        }
+        return this;
+    }
+
+    public setOkToMQTT(v: boolean) {
+        this.setBitfieldBit(BITFIELD_OK_TO_MQTT_SHIFT, v);
         return this;
     }
 
