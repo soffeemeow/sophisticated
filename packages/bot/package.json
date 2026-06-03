@@ -1,6 +1,6 @@
 {
-  "name": "sophisticated",
-  "version": "1.6.5",
+  "name": "@sophisticated/bot",
+  "version": "1.6.6",
   "description": "",
   "main": "./dist/main.js",
   "type": "module",
@@ -14,10 +14,10 @@
   "license": "AGPL-3.0-only",
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@sophisticated/meshtastic-proto": "../meshtastic-proto",
-    "@sophisticated/metrics-http-server": "../metrics-http-server",
-    "@sophisticated/meshtastic-crypto": "../meshtastic-crypto",
-    "@bufbuild/protobuf": "2.11.0",
+    "@sophisticated/meshtastic-proto": "workspace:*",
+    "@sophisticated/metrics-http-server": "workspace:*",
+    "@sophisticated/meshtastic-crypto": "workspace:*",
+    "@bufbuild/protobuf": "catalog:",
     "@noble/curves": "^2.2.0",
     "dotenv-cli": "^8.0.0",
     "lodash.merge": "^4.6.2",
@@ -29,8 +29,8 @@
   },
   "devDependencies": {
     "@types/lodash.merge": "^4.6.9",
-    "@types/node": "^25.2.0",
+    "@types/node": "catalog:",
     "tsx": "^4.19.3",
-    "typescript": "^5.8.3"
+    "typescript": "catalog:"
   }
 }

@@ -3,12 +3,13 @@ WORKDIR /build
 
 RUN apk add python3 make g++ && corepack enable
 
-COPY package*.json pnpm*.yaml tsconfig.json buf.gen.yaml ./
-RUN pnpm install --frozen-lockfile
-
-COPY src ./src
+COPY pnpm*.yaml ./
+COPY packages ./packages
 COPY proto ./proto
-RUN pnpm run build && pnpm prune --prod
+
+RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
+RUN pnpm -r build
+RUN pnpm --filter=bot --legacy --prod deploy /build/pruned
 
 FROM node:22-alpine AS final
 
@@ -24,8 +25,8 @@ VOLUME /data
 USER $USERNAME
 
 WORKDIR /app
-COPY --from=build /build/package*.json ./
-COPY --from=build /build/dist ./dist
-COPY --from=build /build/node_modules ./node_modules
+COPY --from=build /build/pruned/package*.json ./
+COPY --from=build /build/pruned/dist ./dist
+COPY --from=build /build/pruned/node_modules ./node_modules
 
 ENTRYPOINT [ "docker-entrypoint.sh", "node", "dist/main.js" ]

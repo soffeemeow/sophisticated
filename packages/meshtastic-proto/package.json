@@ -14,12 +14,11 @@
   "license": "GPL-3.0-only",
   "packageManager": "pnpm@10.28.0",
   "dependencies": {
-    "@bufbuild/protobuf": "2.11.0"
+    "@bufbuild/protobuf": "catalog:"
   },
   "devDependencies": {
     "@bufbuild/buf": "1.64.0",
     "@bufbuild/protoc-gen-es": "2.11.0",
-    "@types/lodash.merge": "4.6.9",
-    "typescript": "5.8.3"
+    "typescript": "catalog:"
   }
 }
