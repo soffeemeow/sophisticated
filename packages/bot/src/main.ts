@@ -119,7 +119,7 @@ client.on("message", async (topic, message) => {
         return;
     }
 
-    const subtopic = topic.slice(config.mqtt.root_topic.length);
+    const subtopic = topic.slice(config.mqtt.root_topic.length + 1);
     const subtopicParts = subtopic.split("/");
 
     const apiVersion = subtopicParts[0];
