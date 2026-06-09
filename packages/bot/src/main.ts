@@ -1,4 +1,4 @@
-import { fromBinary } from "@bufbuild/protobuf";
+import { create, fromBinary } from "@bufbuild/protobuf";
 import * as mqtt from './mqtt.js';
 import { durationOrSeconds, envelopeHasPacket, formatPacketLog, getCmdlineOption } from './utils.js';
 import { defaultNodeInfoBinary, defaultPositionBinary } from './packets/response.js';
@@ -109,14 +109,114 @@ setInterval(() => {
 }, 60 * 1000);
 
 client.on("message", async (topic, message) => {
+    if (!topic.startsWith(config.mqtt.root_topic)) {
+        console.log(`received mqtt message with unknown root_topic, topic=${topic}`);
+        return;
+    }
+
+    if (topic === config.mqtt.root_topic) {
+        console.log(`received mqtt message with valid root_topic, but no subtopic was provided`);
+        return;
+    }
+
+    const subtopic = topic.slice(config.mqtt.root_topic.length);
+    const subtopicParts = subtopic.split("/");
+
+    const apiVersion = subtopicParts[0];
+    const messageType = subtopicParts[1];
+
+    if (apiVersion !== "2") return;
+
+    if (!messageType) {
+        console.log(`malformed mqtt topic=${topic}, no message type.`);
+        return;
+    }
+
+    switch (messageType) {
+        case "json": {
+            console.log(`received json message on mqtt topic=${topic}, it is not supported though.`);
+            return;
+        }
+        case "map": {
+            console.log(`received map report message on mqtt topic=${topic}, it is not supported though.`);
+            return;
+        }
+        case "e": {
+            await handleMQTTCryptMessage(topic, subtopicParts, message);
+            return;
+        }
+        // this is for custom firmware with radio sniffing feature
+        case "sniff": {
+            await handleMQTTSniffMessage(topic, subtopicParts, message);
+            return;
+        }
+        default: {
+            console.log(`received unknown message type=${messageType} on mqtt topic=${topic}.`);
+            return;
+        }
+    }
+});
+
+async function handleMQTTSniffMessage(topic: string, subtopicParts: string[], message: Buffer) {
+    // [ "2", "sniff", "gatewayId" ]
+    if (subtopicParts.length < 3) {
+        console.log(`malformed mqtt sniff message topic=${topic}`);
+        return;
+    }
+
+    const mqttGateway = subtopicParts[2]!;
+
+    let envelope: meshtastic.Mqtt.ServiceEnvelope;
+    try {
+        envelope = create(meshtastic.Mqtt.ServiceEnvelopeSchema, {
+            gatewayId: mqttGateway,
+            channelId: "SNIFF",
+            packet: fromBinary(meshtastic.Mesh.MeshPacketSchema, message),
+        });
+    } catch (e) {
+        console.error(`failed to construct ServiceEnvelope from sniffed MeshPacket, topic=${topic}, error=${e}`);
+        return;
+    }
+    
+    await handleServiceEnvelope(topic, envelope);
+}
+
+async function handleMQTTCryptMessage(topic: string, subtopicParts: string[], message: Buffer) {
+    // [ "2", "e", "channelId", "gatewayId" ]
+    if (subtopicParts.length < 4) {
+        console.log(`malformed mqtt crypt message topic=${topic}`);
+        return;
+    }
+
+    const mqttChannelId = subtopicParts[2];
+    const mqttGateway = subtopicParts[3];
+
+    let envelope: meshtastic.Mqtt.ServiceEnvelope;
+    try {
+        envelope = fromBinary(meshtastic.Mqtt.ServiceEnvelopeSchema, message);
+    } catch (e) {
+        console.error(`failed to decode ServiceEnvelope, topic=${topic}, error=${e}`);
+        return;
+    }
+
     counters.numPacketsRx++;
 
-    const envelope = fromBinary(meshtastic.Mqtt.ServiceEnvelopeSchema, message);
+    if (envelope.channelId !== mqttChannelId) {
+        console.warn(formatPacketLog(topic, envelope), "channelId of ServiceEnvelope and MQTT topic does not match.");
+    }
+
+    if (envelope.gatewayId !== mqttGateway) {
+        console.warn(formatPacketLog(topic, envelope), "gatewayId of ServiceEnvelope and MQTT topic does not match.");
+    }
 
     if (envelope.gatewayId === config.meshtastic.node.id) {
         return;
     }
 
+    await handleServiceEnvelope(topic, envelope);
+}
+
+async function handleServiceEnvelope(topic: string, envelope: meshtastic.Mqtt.ServiceEnvelope) {
     if (envelope.gatewayId !== config.mqtt.gateway) {
         console.log(formatPacketLog(topic, envelope), `received message from unknown gateway, throwing away.`);
         return;
@@ -141,7 +241,7 @@ client.on("message", async (topic, message) => {
     // console.log(topic, envelope);
 
     await handleIncomingPacket(envelope, topic);
-});
+}
 
 async function sendNodeInfo() {
     await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
