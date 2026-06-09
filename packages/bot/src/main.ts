@@ -57,7 +57,7 @@ await mqtt.initMQTT();
 
 const metricsExporter = new MetricsExporter();
 if (config.metrics.enabled) {
-    console.log(`"Starting Prometheus metrics server on http://${config.metrics.listen_address}:${config.metrics.listen_port}/metrics`);
+    console.log(`Starting Prometheus metrics server on http://${config.metrics.listen_address}:${config.metrics.listen_port}/metrics`);
     mqtt.initMqttTxMetrics(metricsExporter.registry);
     metricsExporter.serve(config.metrics.listen_address, config.metrics.listen_port);
 }
