@@ -250,71 +250,89 @@ function updateNodeDBInfo(packet: meshtastic.Mesh.MeshPacket) {
     nodedb.updateUser(nodeInfo.id, nodeInfo);
 }
 
-export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+export async function handleIncomingPacket(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
     updateNodeDBInfo(envelope.packet);
-    
+
     if (envelope.packet.payloadVariant.case === "decoded") {
-        switch (envelope.packet.payloadVariant.value.portnum) {
-            case meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP: {
-                return await handleTextMessageApp(envelope, receivedTopic);
-            }
-            case meshtastic.Portnums.PortNum.NODEINFO_APP: {
-                return await handleNodeInfoApp(envelope, receivedTopic);
-            }
-            case meshtastic.Portnums.PortNum.POSITION_APP: {
-                return await handlePositionApp(envelope, receivedTopic);
-            }
-            case meshtastic.Portnums.PortNum.TRACEROUTE_APP: {
-                return await handleTracerouteApp(envelope, receivedTopic);
-            }
-            case meshtastic.Portnums.PortNum.TELEMETRY_APP: {
-                return await handleTelemetryApp(envelope, receivedTopic);
-            }
-            default: {
-                console.log(formatPacketLog(receivedTopic, envelope), envelope, envelope.packet.payloadVariant);
-            }
-        }
+        await handleDecodedPacket(envelope, receivedTopic);
         return;
     }
-    if (envelope.packet.payloadVariant.case === "encrypted") {
-        if (envelope.packet.pkiEncrypted) {
-            if (envelope.packet.to !== stringUidToNumber(config.meshtastic.node.id)) {
-                console.log(formatPacketLog(receivedTopic, envelope), "PKI message but not for us. ignoring.");
-                return;
-            }
 
-            try {
+    if (envelope.packet.payloadVariant.case === "encrypted") {
+        if (envelope.packet.pkiEncrypted && envelope.packet.to !== stringUidToNumber(config.meshtastic.node.id)) {
+            console.log(formatPacketLog(receivedTopic, envelope), "PKI message but not for us. ignoring.");
+            return;
+        }
+
+        try {
+            let data: meshtastic.Mesh.Data;
+
+            if (envelope.packet.pkiEncrypted) {
                 const payload = decryptPKIPacket(envelope.packet.publicKey, envelope.packet);
-                const data = fromBinary(meshtastic.Mesh.DataSchema, payload);
-                envelope.packet.payloadVariant = {
-                    value: data,
-                    case: "decoded",
-                };
-            } catch (e) {
-                console.log("failed to decrypt message", e);
-            }
-        } else {
-            try {                
+                data = fromBinary(meshtastic.Mesh.DataSchema, payload);
+            } else {
                 const channelPSK = config.channels.find(c => c.name === envelope.channelId)?.psk;
                 const psk = channelPSK ? PSK.fromBase64String(channelPSK) : PSK.defaultPSK;
 
                 const nonce = createNonce(envelope.packet.from, envelope.packet.id);
                 const result = decrypt(psk, nonce, envelope.packet.payloadVariant.value);
-                const data = fromBinary(meshtastic.Mesh.DataSchema, result);
-
-                envelope.packet.payloadVariant = {
-                    value: data,
-                    case: "decoded",
-                };
-            } catch (e) {
-                console.log("failed to decrypt message", e);
+                data = fromBinary(meshtastic.Mesh.DataSchema, result);
             }
+
+            envelope.packet.payloadVariant = {
+                value: data,
+                case: "decoded",
+            };
+        } catch (e) {
+            console.log("failed to decrypt message", e);
+            return;
         }
-        await handleIncomingPacket(envelope, receivedTopic);
+        
+        await handleDecodedPacket(envelope, receivedTopic);
+        return;
     }
+
     if (envelope.packet.payloadVariant.case === undefined) {
         console.log(formatPacketLog(receivedTopic, envelope), "received message with empty payload");
         return;
+    }
+}
+
+async function handleDecodedPacket(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    if (envelope.packet.payloadVariant.case !== "decoded") {
+        console.error(
+            formatPacketLog(receivedTopic, envelope), 
+            "handleDecodedPacket was called, but packet's payload variant is not 'decoded'.", 
+            `case=${envelope.packet.payloadVariant.case}`
+        );
+        return;
+    }
+
+    switch (envelope.packet.payloadVariant.value.portnum) {
+        case meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP: {
+            await handleTextMessageApp(envelope, receivedTopic);
+            return;
+        }
+        case meshtastic.Portnums.PortNum.NODEINFO_APP: {
+            await handleNodeInfoApp(envelope, receivedTopic);
+            return;
+        }
+        case meshtastic.Portnums.PortNum.POSITION_APP: {
+            await handlePositionApp(envelope, receivedTopic);
+            return;
+        }
+        case meshtastic.Portnums.PortNum.TRACEROUTE_APP: {
+            await handleTracerouteApp(envelope, receivedTopic);
+            return;
+        }
+        case meshtastic.Portnums.PortNum.TELEMETRY_APP: {
+            await handleTelemetryApp(envelope, receivedTopic);
+            return;
+        }
+        default: {
+            console.log(formatPacketLog(receivedTopic, envelope), envelope, envelope.packet.payloadVariant);
+            return;
+        }
     }
 }
 
