@@ -10,7 +10,6 @@ import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.j
 import { TelemetryBuilder } from "./meshtastic/builders.js";
 import { defaultNodeInfoBinary, defaultPositionBinary } from "./packets/response.js";
 import { InstantVector, prometheus } from "./prometheus.js";
-import { writeFile } from "fs/promises";
 import { decryptPKIPacket } from "./crypto/pki.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
@@ -175,7 +174,8 @@ async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
 export interface TextMessageContext {
     packet: IncomingPacket;
     message: string;
-    isEncrypted: boolean;   
+    isEncrypted: boolean;
+    replyDestinationHint: number;
 }
 
 export interface TextCommandHandler {
@@ -186,7 +186,7 @@ export interface TextCommandHandler {
 
 const TextCommandHandlers: TextCommandHandler[] = [];
 
-async function handleTextMessageApp(envelope: any, receivedTopic: string) {
+async function handleTextMessageApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
     if (!envelope.packet.payloadVariant) return;
 
     let msg: string;
@@ -208,6 +208,7 @@ async function handleTextMessageApp(envelope: any, receivedTopic: string) {
                 packet: envelopeToIncomingPacket(envelope),
                 message: msg,
                 isEncrypted: envelope.packet.payloadVariant.case === "encrypted",
+                replyDestinationHint: envelope.channelId === "PKI" ? envelope.packet.from : 0xffffffff,
         };
         try {
             if (h.test(ctx)) {
@@ -276,21 +277,23 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
         return;
     }
     if (envelope.packet.payloadVariant.case === "encrypted") {
-        // #TODO pki encryption WIP
-        if (envelope.packet.pkiEncrypted && envelope.packet.to === stringUidToNumber(config.meshtastic.node.id)) {
-            // if (envelope.packet.from === stringUidToNumber(config.mqtt.gateway)) {
-            //     await writeFile("./rx_gw_pki.msh", toBinary(meshtastic.Mesh.MeshPacketSchema, envelope.packet));
-            // }
+        if (envelope.packet.pkiEncrypted) {
+            if (envelope.packet.to !== stringUidToNumber(config.meshtastic.node.id)) {
+                console.log(formatPacketLog(receivedTopic, envelope), "PKI message but not for us. ignoring.");
+                return;
+            }
+
             try {
                 const payload = decryptPKIPacket(envelope.packet.publicKey, envelope.packet);
-                console.log(payload.toString("utf-8"));
                 const data = fromBinary(meshtastic.Mesh.DataSchema, payload);
-                console.log(data);
+                envelope.packet.payloadVariant = {
+                    value: data,
+                    case: "decoded",
+                };
             } catch (e) {
                 console.log("failed to decrypt message", e);
             }
-        }
-        if (!envelope.packet.pkiEncrypted) {
+        } else {
             try {                
                 const channelPSK = config.channels.find(c => c.name === envelope.channelId)?.psk;
                 const psk = channelPSK ? PSK.fromBase64String(channelPSK) : PSK.defaultPSK;
@@ -303,13 +306,11 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
                     value: data,
                     case: "decoded",
                 };
-
-                await handleIncomingPacket(envelope, receivedTopic);
             } catch (e) {
                 console.log("failed to decrypt message", e);
             }
         }
-        return;
+        await handleIncomingPacket(envelope, receivedTopic);
     }
     if (envelope.packet.payloadVariant.case === undefined) {
         console.log(formatPacketLog(receivedTopic, envelope), "received message with empty payload");
@@ -355,7 +356,7 @@ TextCommandHandlers.push({
             .setChannelId(ctx.packet.channelId)
             .packetPayload(packet => packet
                 .defaults()
-                .setDestination(0xffffffff)
+                .setDestination(ctx.replyDestinationHint)
                 .dataPayload(data => data
                     .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
@@ -396,7 +397,7 @@ TextCommandHandlers.push({
             .setChannelId(ctx.packet.channelId)
             .packetPayload(packet => packet
                 .defaults()
-                .setDestination(0xffffffff)
+                .setDestination(ctx.replyDestinationHint)
                 .dataPayload(data => data
                     .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
@@ -491,7 +492,7 @@ TextCommandHandlers.push({
             .setChannelId(ctx.packet.channelId)
             .packetPayload(packet => packet
                 .defaults()
-                .setDestination(0xffffffff)
+                .setDestination(ctx.replyDestinationHint)
                 .dataPayload(data => data
                     .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)
@@ -616,7 +617,7 @@ TextCommandHandlers.push({
             .setChannelId(ctx.packet.channelId)
             .packetPayload(packet => packet
                 .defaults()
-                .setDestination(0xffffffff)
+                .setDestination(ctx.replyDestinationHint)
                 .dataPayload(data => data
                     .defaults()
                     .setPortnum(meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP)

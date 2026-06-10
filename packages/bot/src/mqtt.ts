@@ -6,6 +6,8 @@ import { Counter, Registry } from 'prom-client';
 import { formatPacketLog, getChannelHash, toStringUserId } from './utils.js';
 import { createNonce, encrypt, PSK } from '@sophisticated/meshtastic-crypto';
 import { config } from './config/config.js';
+import { encryptPKIPacket } from './crypto/pki.js';
+import { nodedb } from './nodedb/node_db.js';
 
 let client: mqtt.MqttClient;
 
@@ -47,7 +49,7 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         throw new Error("Packet is empty in ServiceEnvelope.");
     }
 
-    if (config.mqtt.encryption && envelope.packet.payloadVariant.case === "decoded") {
+    if (config.mqtt.encryption && envelope.packet.payloadVariant.case === "decoded" && envelope.channelId !== "PKI") {
         const channel = config.channels.find(c => c.name === envelope.channelId);
 
         if (!channel) {
@@ -62,6 +64,27 @@ async function sendPacket(envelope: meshtastic.Mqtt.ServiceEnvelope) {
         envelope.packet.payloadVariant = {
             case: "encrypted",
             value: encrypt(psk, nonce, toBinary(meshtastic.Mesh.DataSchema,envelope.packet.payloadVariant.value)),
+        };
+    }
+
+    if (envelope.packet.payloadVariant.case === "decoded" && envelope.channelId === "PKI") {
+        if (envelope.packet.to === 0xffffffff) {
+            console.error(formatPacketLog("MQTT_SEND_PKI", envelope), `unable to send pki message: broadcast address as destination is not allowed!`);
+            return;
+        }
+
+        const user = nodedb.getUser(envelope.packet.to);
+        if (!user) {
+            console.warn(formatPacketLog("MQTT_SEND_PKI", envelope), `unable to send pki message: no nodedb entry found for node ${toStringUserId(envelope.packet.to)}`);
+            return;
+        }
+
+        const data = encryptPKIPacket(user.publicKey, envelope.packet);
+
+        envelope.packet.channel = 0;
+        envelope.packet.payloadVariant = {
+            case: "encrypted",
+            value: data,
         };
     }
 

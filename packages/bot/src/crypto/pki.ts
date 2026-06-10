@@ -31,19 +31,12 @@ export function decryptPKIPacket(remoteKey: Uint8Array, packet: Mesh.MeshPacket)
     const sharedKey = x25519.getSharedSecret(keypair.getPrivateKey(), publicKey);
     const sharedKeyHash = createHash("sha256").update(sharedKey).digest();
 
-    console.log("shared key hash:", sharedKeyHash);
-
     const payload = packet.payloadVariant.value;
 
     const encryptedData = payload.subarray(0, payload.length - 12);
     const auth = payload.subarray(payload.length - 12, payload.length - 4);
     const extraNonce = Buffer.from(payload).readUint32LE(payload.length - 4);
     const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 13);
-
-    console.log(encryptedData.length, "enc_data:", encryptedData);
-    console.log(auth.length, "auth:", auth);
-    console.log("extra nonce:", extraNonce.toString(16));
-    console.log(nonce.length, "nonce:", nonce);
 
     const decipher = createDecipheriv('aes-256-ccm', sharedKeyHash, nonce, {
         authTagLength: 8,
@@ -79,15 +72,10 @@ export function encryptPKIPacket(remoteKey: Uint8Array, packet: Mesh.MeshPacket)
     const sharedKey = x25519.getSharedSecret(keypair.getPrivateKey(), publicKey);
     const sharedKeyHash = createHash("sha256").update(sharedKey).digest();
 
-    console.log("shared key hash:", sharedKeyHash);
-
     const plainText = toBinary(Mesh.DataSchema, packet.payloadVariant.value);
     const extraNonceBytes = randomBytes(4);
     const extraNonce = extraNonceBytes.readUint32LE();
     const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 13);
-
-    console.log("extra nonce:", extraNonce, extraNonceBytes);
-    console.log(nonce.length, "nonce:", nonce);
 
     const cipher = createCipheriv('aes-256-ccm', sharedKeyHash, nonce, {
         authTagLength: 8,
