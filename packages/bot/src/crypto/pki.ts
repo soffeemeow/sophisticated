@@ -38,7 +38,7 @@ export function decryptPKIPacket(remoteKey: Uint8Array, packet: Mesh.MeshPacket)
     const encryptedData = payload.subarray(0, payload.length - 12);
     const auth = payload.subarray(payload.length - 12, payload.length - 4);
     const extraNonce = Buffer.from(payload).readUint32LE(payload.length - 4);
-    const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 12);
+    const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 13);
 
     console.log(encryptedData.length, "enc_data:", encryptedData);
     console.log(auth.length, "auth:", auth);
@@ -84,7 +84,7 @@ export function encryptPKIPacket(remoteKey: Uint8Array, packet: Mesh.MeshPacket)
     const plainText = toBinary(Mesh.DataSchema, packet.payloadVariant.value);
     const extraNonceBytes = randomBytes(4);
     const extraNonce = extraNonceBytes.readUint32LE();
-    const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 12);
+    const nonce = createNonce(packet.from, packet.id, extraNonce).subarray(0, 13);
 
     console.log("extra nonce:", extraNonce, extraNonceBytes);
     console.log(nonce.length, "nonce:", nonce);

@@ -3,8 +3,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { Mesh, Portnums } from "@sophisticated/meshtastic-proto";
 import { encryptPKIPacket, initKeyPair } from "./crypto/pki.js";
 import { initNodeDB } from "./nodedb/node_db.js";
-import { config } from "./config/config.js";
+import { config, loadConfig } from "./config/config.js";
 
+loadConfig("./config.yaml");
 initNodeDB();
 initKeyPair(config.meshtastic.pki.private_key_path);
 

@@ -10,6 +10,8 @@ import { ServiceEnvelopeBuilderWithDefaults } from "./packets/default_builders.j
 import { TelemetryBuilder } from "./meshtastic/builders.js";
 import { defaultNodeInfoBinary, defaultPositionBinary } from "./packets/response.js";
 import { InstantVector, prometheus } from "./prometheus.js";
+import { writeFile } from "fs/promises";
+import { decryptPKIPacket } from "./crypto/pki.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
@@ -275,19 +277,19 @@ export async function handleIncomingPacket(envelope: RequiredBy<meshtastic.Mqtt.
     }
     if (envelope.packet.payloadVariant.case === "encrypted") {
         // #TODO pki encryption WIP
-        // if (envelope.packet.pkiEncrypted && envelope.packet.to === stringUidToNumber(env.MSH_UID)) {
-        //     if (envelope.packet.from === stringUidToNumber(env.MSH_GATEWAY)) {
-        //         await writeFile("./rx_gw_pki.msh", toBinary(meshtastic.Mesh.MeshPacketSchema, envelope.packet));
-        //     }
-        //     try {
-        //         const payload = decryptPKIPacket(envelope.packet.publicKey, envelope.packet);
-        //         console.log(payload.toString("utf-8"));
-        //         const data = fromBinary(meshtastic.Mesh.DataSchema, payload);
-        //         console.log(data);
-        //     } catch (e) {
-        //         console.log("failed to decrypt message", e);
-        //     }
-        // }
+        if (envelope.packet.pkiEncrypted && envelope.packet.to === stringUidToNumber(config.meshtastic.node.id)) {
+            // if (envelope.packet.from === stringUidToNumber(config.mqtt.gateway)) {
+            //     await writeFile("./rx_gw_pki.msh", toBinary(meshtastic.Mesh.MeshPacketSchema, envelope.packet));
+            // }
+            try {
+                const payload = decryptPKIPacket(envelope.packet.publicKey, envelope.packet);
+                console.log(payload.toString("utf-8"));
+                const data = fromBinary(meshtastic.Mesh.DataSchema, payload);
+                console.log(data);
+            } catch (e) {
+                console.log("failed to decrypt message", e);
+            }
+        }
         if (!envelope.packet.pkiEncrypted) {
             try {                
                 const channelPSK = config.channels.find(c => c.name === envelope.channelId)?.psk;
