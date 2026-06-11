@@ -197,3 +197,11 @@ await sendNodeInfo();
 await sendPosition();
 await sendEnvironmentMetrics();
 await sendDeviceMetrics();
+
+function handleExitSignal(s: string) {
+    logger.info(`received ${s}, stopping application...`);
+    process.exit();
+}
+
+process.on("SIGTERM", handleExitSignal);
+process.on("SIGINT", handleExitSignal);
