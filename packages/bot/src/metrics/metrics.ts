@@ -3,6 +3,9 @@ import { MetricsServer } from "@sophisticated/metrics-http-server";
 import * as meshtastic from '@sophisticated/meshtastic-proto';
 import { toStringUserId } from "../utils.js";
 import { toBinary } from "@bufbuild/protobuf";
+import { getLogger } from "../logger.js";
+
+const logger = getLogger().child({ module: "metrics" });
 
 export class MetricsExporter {
     private server: MetricsServer<Registry> | undefined;
@@ -69,6 +72,7 @@ export class MetricsExporter {
             throw new Error("Server is already started.");
         }
         this.server = new MetricsServer(this.registry);
+        this.server.attachLogger(logger.child({ module: "metrics-http" }));
         this.server.listen(address, port);
     }
 
@@ -107,4 +111,9 @@ export class MetricsExporter {
 
         this.mesh_packets_received_payload_size_histogram.observe(histogramLabels, payloadSize);
     }
+}
+
+const metricsExporter = new MetricsExporter();
+export {
+    metricsExporter,
 }

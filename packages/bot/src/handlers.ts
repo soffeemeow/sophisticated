@@ -1,6 +1,6 @@
 import { create, fromBinary, toBinary } from "@bufbuild/protobuf";
 import * as meshtastic from '@sophisticated/meshtastic-proto';
-import { ConcurrentPool, envelopeToIncomingPacket, formatPacketLog, stringUidToNumber, type IncomingPacket, type NonNullableBy, type RequiredBy } from "./utils.js";
+import { ConcurrentPool, envelopeToIncomingPacket, stringUidToNumber, toStringUserId, type IncomingPacket, type RequiredBy } from "./utils.js";
 import * as mqtt from './mqtt.js';
 import { getDeviceMetrics, getEnvironmentMetrics } from "./telemetry.js";
 import { nodedb } from "./nodedb/node_db.js";
@@ -11,19 +11,26 @@ import { TelemetryBuilder } from "./meshtastic/builders.js";
 import { defaultNodeInfoBinary, defaultPositionBinary } from "./packets/response.js";
 import { InstantVector, prometheus } from "./prometheus.js";
 import { decryptPKIPacket } from "./crypto/pki.js";
+import { getLogger } from "./logger.js";
 // #TODO pki encryption WIP
 // import { decryptPKIPacket } from "./crypto/pki.js";
 // import { writeFile } from "node:fs/promises";
 
+const _logger = getLogger().child({ module: "handlers" });
+
 type PopulatedServiceEnvelope = RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">;
 
 async function handleTelemetryApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "TelemetryAppHandler", msh_env: envelope });
+
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
     let telemetry = fromBinary(meshtastic.Telemetry.TelemetrySchema, envelope.packet.payloadVariant.value.payload);
 
-    console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] at ${new Date(telemetry.time * 1000).toISOString()}`, telemetry.variant.value);
+    logger.info(`received ${telemetry.variant.case} captured at ${new Date(telemetry.time * 1000).toISOString()}`, 
+        { value: telemetry.variant.value }
+    );
     
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         const responseBuilder = new TelemetryBuilder()
@@ -65,7 +72,7 @@ async function handleTelemetryApp(envelope: PopulatedServiceEnvelope, receivedTo
             }
 
             default: {
-                console.log(formatPacketLog("TelemetryApp", envelope), `[${telemetry.variant.case}] unsupported telemetry request`);
+                logger.warn(`${telemetry.variant.case} is unsupported}`, { value: telemetry.variant.value });
                 return;
             }
         }
@@ -88,12 +95,28 @@ async function handleTelemetryApp(envelope: PopulatedServiceEnvelope, receivedTo
 }
 
 async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+    const logger = _logger.child({ tag: "TracerouteAppHandler", msh_env: envelope });
+
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
     let routeDiscovery = fromBinary(meshtastic.Mesh.RouteDiscoverySchema, envelope.packet.payloadVariant.value.payload);
 
-    console.log(formatPacketLog("TracerouteApp", envelope), routeDiscovery);
+    // #FIXME this is kinda broken
+    function formatRouteDiscovery(route: meshtastic.Mesh.RouteDiscovery) {
+        let text = "";
+        for(let i = 0; i < route.route.length; i++) {
+            const nodeName = route.route[i] ? toStringUserId(route.route[i]!) : "null";
+            text += nodeName + ` -${route.snrTowards[i]}-> `;
+        }
+        for(let i = 0; i < route.routeBack.length; i++) {
+            const nodeName = route.routeBack[i] ? toStringUserId(route.routeBack[i]!) : "null";
+            text += nodeName + ` -${route.snrBack[i]}-> `;
+        }
+        return text;
+    }
+
+    logger.info("received RouteDiscovery: " + formatRouteDiscovery(routeDiscovery), { value: routeDiscovery });
     
     const nodeId = stringUidToNumber(config.meshtastic.node.id);
 
@@ -117,14 +140,18 @@ async function handleTracerouteApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceE
     }
 }
 
-async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+async function handleNodeInfoApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "NodeInfoAppHandler", msh_env: envelope });
+
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
     let nodeInfo = fromBinary(meshtastic.Mesh.UserSchema, envelope.packet.payloadVariant.value.payload);
 
-    console.log(formatPacketLog("NodeInfoApp", envelope), `${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel}`);
-    
+    logger.info(`received NodeInfo: ${nodeInfo.id} (${nodeInfo.shortName}) ${nodeInfo.longName} ${nodeInfo.role} ${nodeInfo.hwModel})`, 
+        { value: nodeInfo }
+    );
+
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
             .defaults()
@@ -142,7 +169,9 @@ async function handleNodeInfoApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
     }
 }
 
-async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnvelope, "packet">, receivedTopic: string) {
+async function handlePositionApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "PositionAppHandler", msh_env: envelope });
+
     if (!envelope.packet.payloadVariant) return;
     if (envelope.packet.payloadVariant.case !== "decoded") return;
 
@@ -152,8 +181,11 @@ async function handlePositionApp(envelope: RequiredBy<meshtastic.Mqtt.ServiceEnv
     const lo = position.longitudeI !== undefined ? position.longitudeI * 1e-7 : "-";
     const alt = position.altitude ?? "-";
 
-    console.log(formatPacketLog("PositionApp", envelope), `LAT: ${la}, LON: ${lo}, ALT: ${alt}, SRC: ${position.locationSource}`);
-    
+
+    logger.info(`received Position: LAT: ${la}, LON: ${lo}, ALT: ${alt}, SRC: ${position.locationSource}`, 
+        { value: position }
+    );
+
     if (envelope.packet.to === stringUidToNumber(config.meshtastic.node.id) && envelope.packet.payloadVariant.value.wantResponse) {
         await mqtt.sendPacket(new ServiceEnvelopeBuilderWithDefaults()
             .defaults()
@@ -187,6 +219,8 @@ export interface TextCommandHandler {
 const TextCommandHandlers: TextCommandHandler[] = [];
 
 async function handleTextMessageApp(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "TextMessageAppHandler", msh_env: envelope });
+
     if (!envelope.packet.payloadVariant) return;
 
     let msg: string;
@@ -195,11 +229,11 @@ async function handleTextMessageApp(envelope: PopulatedServiceEnvelope, received
     } else if (envelope.packet.payloadVariant.case === "encrypted") {
         msg = "<encrypted message>";
     } else {
-        console.error("unknown packet.payloadVariant in TextMessageApp handler:", envelope.packet.payloadVariant.case);
+        logger.error(`unknown packet.payloadVariant: ${envelope.packet.payloadVariant.case}`);
         msg = "";
     }
 
-    console.log(formatPacketLog("TextMessageApp", envelope), msg);
+    logger.info(`received TextMessage: ${msg}`, { text_message: msg });
 
     if (!config.bot.enabled) return;
 
@@ -212,11 +246,11 @@ async function handleTextMessageApp(envelope: PopulatedServiceEnvelope, received
         };
         try {
             if (h.test(ctx)) {
-                console.log(`found handler for request: ${h.name ?? "unnamed"}`);
+                logger.info(`found handler for request: ${h.name ?? "unnamed"}`, { handler: h.name });
                 await h.handler(ctx);
             }
         } catch (e) {
-            console.error(`Error in TextCommandHandler (${h.name ?? "unnamed"}):`, e);
+            logger.error(`Error in TextCommandHandler (${h.name ?? "unnamed"}): ${e}`, { handler: h.name, error: e });
             continue;
         }
     }
@@ -251,6 +285,13 @@ function updateNodeDBInfo(packet: meshtastic.Mesh.MeshPacket) {
 }
 
 export async function handleIncomingPacket(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "IncomingPacketHandler", msh_env: envelope });
+
+    if (envelope.packet.from === stringUidToNumber(config.meshtastic.node.id)) {
+        logger.debug("ignoring packet originating from us");
+        return;
+    }
+
     updateNodeDBInfo(envelope.packet);
 
     if (envelope.packet.payloadVariant.case === "decoded") {
@@ -260,7 +301,7 @@ export async function handleIncomingPacket(envelope: PopulatedServiceEnvelope, r
 
     if (envelope.packet.payloadVariant.case === "encrypted") {
         if (envelope.packet.pkiEncrypted && envelope.packet.to !== stringUidToNumber(config.meshtastic.node.id)) {
-            console.log(formatPacketLog(receivedTopic, envelope), "PKI message but not for us. ignoring.");
+            logger.info("PKI message but not for us. ignoring.");
             return;
         }
 
@@ -284,53 +325,59 @@ export async function handleIncomingPacket(envelope: PopulatedServiceEnvelope, r
                 case: "decoded",
             };
         } catch (e) {
-            console.log("failed to decrypt message", e);
+            logger.error("failed to decrypt message", e);
             return;
         }
         
+        logger.debug("propagating received ServiceEnvelope down into handleDecodedPacket");
         await handleDecodedPacket(envelope, receivedTopic);
         return;
     }
 
     if (envelope.packet.payloadVariant.case === undefined) {
-        console.log(formatPacketLog(receivedTopic, envelope), "received message with empty payload");
+        logger.warn("received message with empty payload");
         return;
     }
 }
 
 async function handleDecodedPacket(envelope: PopulatedServiceEnvelope, receivedTopic: string) {
+    const logger = _logger.child({ tag: "DecodedPacketHandler", msh_env: envelope });
+
     if (envelope.packet.payloadVariant.case !== "decoded") {
-        console.error(
-            formatPacketLog(receivedTopic, envelope), 
-            "handleDecodedPacket was called, but packet's payload variant is not 'decoded'.", 
-            `case=${envelope.packet.payloadVariant.case}`
+        logger.error(
+            `handleDecodedPacket was called, but packet's payload variant is '${envelope.packet.payloadVariant.case}', not 'decoded'.`
         );
         return;
     }
 
     switch (envelope.packet.payloadVariant.value.portnum) {
         case meshtastic.Portnums.PortNum.TEXT_MESSAGE_APP: {
+            logger.debug("propagating received ServiceEnvelope down into handleTextMessageApp");
             await handleTextMessageApp(envelope, receivedTopic);
             return;
         }
         case meshtastic.Portnums.PortNum.NODEINFO_APP: {
+            logger.debug("propagating received ServiceEnvelope down into handleNodeInfoApp");
             await handleNodeInfoApp(envelope, receivedTopic);
             return;
         }
         case meshtastic.Portnums.PortNum.POSITION_APP: {
+            logger.debug("propagating received ServiceEnvelope down into handlePositionApp");
             await handlePositionApp(envelope, receivedTopic);
             return;
         }
         case meshtastic.Portnums.PortNum.TRACEROUTE_APP: {
+            logger.debug("propagating received ServiceEnvelope down into handleTracerouteApp");
             await handleTracerouteApp(envelope, receivedTopic);
             return;
         }
         case meshtastic.Portnums.PortNum.TELEMETRY_APP: {
+            logger.debug("propagating received ServiceEnvelope down into handleTelemetryApp");
             await handleTelemetryApp(envelope, receivedTopic);
             return;
         }
         default: {
-            console.log(formatPacketLog(receivedTopic, envelope), envelope, envelope.packet.payloadVariant);
+            logger.info(`unsupported portnum ${envelope.packet.payloadVariant.value.portnum}, skipping`);
             return;
         }
     }
@@ -398,6 +445,8 @@ TextCommandHandlers.push({
         return msg === "weather" || msg === "погода";
     },
     handler: async (ctx) => {
+        const logger = _logger.child({ tag: "textcmd/weather" });
+
         let response;
         try {
             const metrics = await getEnvironmentMetrics();
@@ -406,7 +455,7 @@ TextCommandHandlers.push({
             // #TODO: add config option for template string
             response = `На улице: 🌡️ ${metrics.temperature.toFixed(2)} °C, ☁️ ${(metrics.barometricPressure / 1.333224).toFixed(2)} mmHg`
         } catch (e) {
-            console.error("prometheus query failed:", e);
+            logger.error("prometheus query failed:", e);
             return;
         }
 

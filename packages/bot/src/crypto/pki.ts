@@ -4,12 +4,15 @@ import { x25519 } from "@noble/curves/ed25519.js";
 import { Mesh } from "@sophisticated/meshtastic-proto";
 import { nodedb } from "../nodedb/node_db.js";
 import { toBinary } from "@bufbuild/protobuf";
+import { getLogger } from "../logger.js";
+
+const logger = getLogger().child({ module: "pki" });
 
 export const keypair = new Keypair();
 
 export function initKeyPair(keyFile: string) {
     if (keypair.initFromFile(keyFile, true)) {
-        console.log(`[PKI] New keypair was generated with pubkey '${keypair.getPublicKeyString()}' and saved to file '${keyFile}'.`);
+        logger.warn(`[PKI] New keypair was generated with pubkey '${keypair.getPublicKeyString()}' and saved to file '${keyFile}'.`);
     }
 }
 

@@ -4,6 +4,10 @@ import { ConfigSchema } from './schemas.js';
 import merge from "lodash.merge";
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import type { MeshtasticDeprecatedRoles, MeshtasticRoles } from '../utils.js';
+import { getLogger } from '../logger.js';
+import { color } from '../colors.js';
+
+const logger = getLogger().child({ module: "config" });
 
 export interface MQTTConnectionConfig {
     host: string;
@@ -289,14 +293,14 @@ const allowedRoles: AllowedRolesTable = {
  * ## DO NOT CALL ON UNVALIDATED CONFIGS
  * @returns list of found problems
  */
-export function checkConfigSanity(config: Config) {
+export function checkConfigSanity(config: Config) {    
     const defaultConfig = getDefaultConfig();
     const problems = [];
 
     if (config.i_exactly_know_what_i_am_doing?.so_let_me_use_default_values_in_config) {
-        console.warn(
-            "You disabled check of the default values in config, so be warned - something may break.", 
-            "You are on your own now."
+        logger.warn(
+            color.fg.yellow("You disabled check of the default values in config, so be warned - something may break. ") +
+            color.fg.red("You are on your own now.")
         );
     } else {
         for(const check of checkDefaults) {

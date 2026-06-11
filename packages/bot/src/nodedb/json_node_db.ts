@@ -5,6 +5,9 @@ import fs from "node:fs";
 import type { NodeInfoStorage } from './node_db.js';
 import { validate } from '../validator.js';
 import { JDBNodeSchema, JDBUserSchema } from './schemas.js';
+import { getLogger } from '../logger.js';
+
+const logger = getLogger().child({ module: "json-nodedb" });
 
 export type JDBNode = Omit<meshtastic.Mesh.NodeInfo, "$typeName" | "$unknown" | "num" | "user" | "position" | "deviceMetrics">
 export type JDBUser = Omit<meshtastic.Mesh.User, "$typeName" | "$unknown" | "id" | "macaddr" | "role" | "hwModel" | "publicKey"> & { role: number, hwModel: number, publicKey: string }
@@ -22,7 +25,7 @@ export class JSONNodeDB implements NodeInfoStorage {
         this.syncInterval = setInterval(async () => {
             if (!this.isDirty) return;
             if (this.isTerminating) return;
-            console.log("[JSON NodeDB] saving json nodedb on disk...");
+            logger.info("saving json nodedb on disk...");
             await this.saveAsync();
             this.isDirty = false;
         // }, 5 * 60 * 1000);
@@ -31,7 +34,7 @@ export class JSONNodeDB implements NodeInfoStorage {
         process.addListener("exit", () => {
             this.isTerminating = true;
             clearInterval(this.syncInterval);
-            console.log("[JSON NodeDB] saving json nodedb on disk before exit...");
+            logger.info("saving json nodedb on disk before exit...");
             this.save();
         });
     }
@@ -73,7 +76,7 @@ export class JSONNodeDB implements NodeInfoStorage {
             }
         }
 
-        console.log(`[JSON NodeDB] loaded ${this.nodes.size} nodes and ${this.nodeUsers.size} users.`);
+        logger.info(`loaded ${this.nodes.size} nodes and ${this.nodeUsers.size} users from nodedb.`);
     }
 
     private compileJsonObject() {
